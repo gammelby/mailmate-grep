@@ -4,6 +4,12 @@ Not part of the package. Usage:
 
     python3 -I tools/bench.py synthetic --out DIR [--scale F]
     python3 -I tools/bench.py real [--root PATH]
+    python3 -I tools/bench.py query --out DIR [--scale F]
+
+The query mode (milestone 3, ruling RP2) builds the same synthetic store
+and times Store.snapshot, query.candidates and query.group_copies for one
+header query and one body query narrowed by an address. It is index only
+and excludes confirmation, since the synthetic store has no .eml files.
 
 The synthetic writer (plan decision D6) writes a store with its own fast
 writer: One array("I") and one bytearray per index and plists in the
@@ -313,6 +319,48 @@ def run(root: Path) -> dict[str, float | int]:
     return result
 
 
+QUERY_LABEL = "index only, excludes confirmation"
+# Header query: One recipient (about 1 in 1999 messages). Body query: The
+# planted token narrowed by one cc address (about 1 in 499 messages).
+HEADER_ADDRESS = "rcpt7@example.org"
+NARROW_ADDRESS = "copy7@example.net"
+
+
+def run_query(root: Path) -> dict[str, float | int]:
+    """Time snapshot, candidates and group_copies for two queries.
+
+    The synthetic store has no .eml files, so every group is dropped and
+    confirmation never runs: Each total is index only. For each query q the
+    result holds q_snapshot_s, q_candidates_s, q_group_s, q_total_s,
+    q_candidates (the candidate count) and q_missing_eml.
+    """
+    from mmgrep import query
+
+    store = Store(Path(root))
+    queries = (
+        ("header", query.Filters(any_address=[query.parse_addr(HEADER_ADDRESS)])),
+        ("body", query.Filters(body=TOKEN,
+                               any_address=[query.parse_addr(NARROW_ADDRESS)])),
+    )
+    result: dict[str, float | int] = {}
+    for key, f in queries:
+        t0 = time.perf_counter()
+        snap = store.snapshot(query.needed_indexes(f))
+        t1 = time.perf_counter()
+        cands = query.candidates(snap, f)
+        t2 = time.perf_counter()
+        grouped = query.group_copies(snap, cands.ids, f, store.messages_dir)
+        t3 = time.perf_counter()
+        result[f"{key}_snapshot_s"] = t1 - t0
+        result[f"{key}_candidates_s"] = t2 - t1
+        result[f"{key}_group_s"] = t3 - t2
+        result[f"{key}_total_s"] = t3 - t0
+        result[f"{key}_candidates"] = len(cands.ids)
+        result[f"{key}_missing_eml"] = grouped.missing_eml
+    result["peak_rss_mb"] = _peak_rss_mb()
+    return result
+
+
 def _print(result: dict[str, float | int]) -> None:
     for key, value in result.items():
         if isinstance(value, float):
@@ -329,7 +377,18 @@ def main(argv: list[str] | None = None) -> int:
     syn.add_argument("--scale", type=float, default=1.0)
     real = sub.add_parser("real", help="time the real store, read only")
     real.add_argument("--root", type=Path, default=DEFAULT_ROOT)
+    qry = sub.add_parser("query", help="build a synthetic store and time two "
+                         f"queries ({QUERY_LABEL})")
+    qry.add_argument("--out", type=Path, required=True)
+    qry.add_argument("--scale", type=float, default=1.0)
     args = parser.parse_args(argv)
+    if args.mode == "query":
+        t0 = time.perf_counter()
+        build_synthetic(args.out, args.scale)
+        print(f"build_s {time.perf_counter() - t0:.3f}")
+        print(f"label {QUERY_LABEL}")
+        _print(run_query(args.out))
+        return 0
     if args.mode == "synthetic":
         t0 = time.perf_counter()
         build_synthetic(args.out, args.scale)

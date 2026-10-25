@@ -1,0 +1,12 @@
+#!/bin/sh
+# Run mmgrep from this checkout with python3 -I (no PYTHONPATH, no cwd).
+self=$0
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case $link in
+    /*) self=$link ;;
+    *) self=$(dirname "$self")/$link ;;
+  esac
+done
+root=$(CDPATH= cd -- "$(dirname -- "$self")/.." && pwd -P) || exit 2
+exec python3 -I -c 'import runpy, sys; sys.path.insert(0, sys.argv.pop(1)); runpy.run_module("mmgrep", run_name="__main__", alter_sys=True)' "$root" "$@"

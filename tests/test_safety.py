@@ -1,8 +1,9 @@
-"""Safety tests for the index core (milestone 2, Task 5; design section 4).
+"""Safety tests for the package (milestone 2 Task 5, milestone 3 Task 7).
 
 The read-only tests build a synthetic store, record the bytes, size, mode
 and mtime of every path under its root plus the path list, run every read
-operation of the package and assert that nothing changed. The static scan
+operation of the package and every CLI mode and assert that nothing
+changed. The static scan
 checks the package source for forbidden calls and for any open() other
 than open(path, "rb") (ruling C4). Failures name file and line only.
 Synthetic data with RFC 2606 domains only.
@@ -11,6 +12,7 @@ Synthetic data with RFC 2606 domains only.
 from __future__ import annotations
 
 import ast
+import contextlib
 import hashlib
 import io
 import os
@@ -19,8 +21,11 @@ import re
 import tempfile
 import tokenize
 import unittest
+from unittest import mock
 
 import mmgrep
+from mmgrep import confirm
+from mmgrep.cli import main
 from mmgrep.index import required_literal
 from mmgrep.source import eml_path, message_of_part, parse_source
 from mmgrep.store import Store
@@ -58,12 +63,39 @@ BAD_SOURCES = (
     'io.FileIO(p, "w")\n',
     'os.fdopen(fd, "w")\n',
     "f = open\n",
+    "os.open(p, os.O_RDONLY)\n",
+    "os.lockf(fd, 1, 0)\n",
+    "os.chflags(p, 0)\n",
+    "os.lchflags(p, 0)\n",
+    "Path(p).read_bytes()\n",
+    "Path(p).read_text()\n",
+    "os.system(c)\n",
+    "os.popen(c)\n",
+    "os.posix_spawn(c, a, e)\n",
+    "os.posix_spawnp(c, a, e)\n",
+    "os.execv(c, a)\n",
+    "os.execve(c, a, e)\n",
+    "os.execl(c, a)\n",
+    "os.execlp(c, a)\n",
+    "os.execvp(c, a)\n",
+    "os.execvpe(c, a, e)\n",
+    "os.spawnv(0, c, a)\n",
+    "os.spawnve(0, c, a, e)\n",
+    "os.spawnl(0, c, a)\n",
+    "os.spawnlp(0, c, a)\n",
+    "os.spawnvp(0, c, a)\n",
+    "os.spawnvpe(0, c, a, e)\n",
 )
 GOOD_SOURCES = (
     'open(p, "rb")\n',
     'open(p, mode="rb")\n',
     '"""Never call os.unlink or flock here."""\n# open(p, "w") and mmap\nx = 1\n',
+    "os.scandir(p)\n",
+    "os.path.exists(p)\n",
 )
+# Every module of the package after milestone 3; the scan must see them all.
+MODULE_STEMS = frozenset({"__init__", "__main__", "cli", "confirm", "index",
+                          "output", "query", "scan", "source", "store"})
 
 
 def _strip(text: str) -> list[str]:
@@ -129,6 +161,10 @@ MUTATING_NAMES = frozenset({
     "unlink", "rmdir", "rename", "renames", "removedirs", "symlink",
     "symlink_to", "hardlink_to", "link", "link_to", "truncate", "ftruncate",
     "FileIO", "fdopen", "chown", "lchown", "mkfifo", "mknod", "__import__",
+    "lockf", "chflags", "lchflags", "read_bytes", "read_text",
+    "system", "popen", "posix_spawn", "posix_spawnp",
+    "execv", "execve", "execl", "execlp", "execvp", "execvpe",
+    "spawnv", "spawnve", "spawnl", "spawnlp", "spawnvp", "spawnvpe",
 })
 IMPORT_MODULES = frozenset({"os", "io", "builtins", "pathlib"})
 ALIAS_MODULES = frozenset({"os", "io", "pathlib"})
@@ -290,10 +326,71 @@ class ReadOnlyTest(unittest.TestCase):
         self.assertEqual(snap.live, frozenset({1200, 1300, 1400, 1500, 1600}))
 
 
+def _run_main(*argv: str) -> tuple[int, str, str]:
+    """main(argv) in process with stdout and stderr captured."""
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = main(list(argv))
+    return code, out.getvalue(), err.getvalue()
+
+
+# 210 messages: Above confirm.POOL_THRESHOLD, so --jobs 2 starts a pool.
+POOL = [_msg(2000 + n, f"Pool {n}", body=[f"pool body {n}"]) for n in range(210)]
+
+
+class CliReadOnlyTest(unittest.TestCase):
+    """Every CLI mode leaves the store byte for byte as it was (Task 7)."""
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = pathlib.Path(tmp.name)
+
+    def _assert_unchanged(self, root: pathlib.Path, before: dict) -> None:
+        after = _fingerprint(root)
+        self.assertEqual(sorted(after), sorted(before), "paths added or removed")
+        changed = [p for p in before if before[p] != after[p]]
+        self.assertEqual(changed, [], "paths changed")
+
+    def test_cli_modes_read_only(self) -> None:
+        root = self.tmp / "five"
+        build_store(root, FIVE)
+        before = _fingerprint(root)
+        self.assertGreater(len(before), 20)
+        modes = {
+            "a": ["--subject", "Second"],
+            "b": ["--body", "there"],
+            "c": ["--body", "there", "--include-quoted", "--full"],
+            "d": ["--subject", "Second", "--no-confirm"],
+        }
+        for label, args in modes.items():
+            with self.subTest(mode=label):
+                code, out, err = _run_main(*args, "--root", str(root))
+                self.assertEqual(code, 0, err)
+                self.assertTrue(out)
+                self._assert_unchanged(root, before)
+
+        pool_root = self.tmp / "pool"
+        build_store(pool_root, POOL)
+        before = _fingerprint(pool_root)
+        real = confirm.ProcessPoolExecutor
+        with self.subTest(mode="e"), mock.patch.object(
+                confirm, "ProcessPoolExecutor", side_effect=real) as pool:
+            code, out, err = _run_main("--full", "--subject", "Pool", "--jobs", "2",
+                                       "--paths-only", "--root", str(pool_root))
+            self.assertEqual(code, 0, err)
+            self.assertEqual(pool.call_count, 1, "pool path not taken")
+            self.assertEqual(
+                pool.call_args.kwargs["mp_context"].get_start_method(), "spawn")
+            self.assertEqual(len(out.splitlines()), 210)
+            self._assert_unchanged(pool_root, before)
+
+
 class StaticScanTest(unittest.TestCase):
     def test_static_scan(self) -> None:
         files = sorted(PACKAGE_DIR.glob("*.py"))
-        self.assertGreaterEqual(len(files), 4)
+        stems = {path.stem for path in files}
+        self.assertEqual(sorted(MODULE_STEMS - stems), [], "modules missing")
         findings: list[str] = []
         for path in files:
             with open(path, "rb") as f:

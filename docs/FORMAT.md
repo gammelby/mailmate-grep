@@ -2,6 +2,8 @@
 
 Credit: The first description of this format came from the format notes in Brian Murphy-Dye's `mailmate` Ruby gem (https://github.com/brianmd/mailmate, MIT). `mmgrep` shares no code with the gem and every fact below was re-verified against copies of real data.
 
+Citations such as "design 6a" or "design section 8" here and in code comments refer to the archived design record `docs/archive/2026-10-25-mmgrep-design.md`. This file and the code are current; the archive is not.
+
 Not affiliated: `mmgrep` is an independent project with no affiliation with or endorsement by MailMate or Freron Software. MailMate is their product and name.
 
 Undocumented format: MailMate's index is private and undocumented. Its author has said that reading it directly "would never be safe to do so while MailMate is running" and that it "could also change at any time" (https://lists.freron.com/mailmate/2015-May/004377.html). Treat everything here as observation, not specification.
