@@ -28,7 +28,13 @@ Clone or download the repository and run the wrapper from the checkout:
 bin/mmgrep --help
 ```
 
-`bin/mmgrep` runs the package with `python3 -I` (isolated mode, so `PYTHONPATH` and the current directory are ignored). It works from any directory and through a symlink, for example one in `~/bin`. From the checkout root `python3 -m mmgrep` works too.
+`bin/mmgrep` runs the package with `python3 -I` (isolated mode, so `PYTHONPATH` and the current directory are ignored). It works from any directory and through a symlink. To put it on your `PATH`, link it into a per-user bin directory that is already on `PATH` (no sudo; `git pull` updates it in place):
+
+```
+ln -s "$PWD/bin/mmgrep" ~/.local/bin/mmgrep
+```
+
+From the checkout root `python3 -m mmgrep` works too.
 
 The default data root is `~/Library/Application Support/MailMate`; `--root PATH` points elsewhere.
 
