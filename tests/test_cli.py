@@ -403,6 +403,25 @@ class TestSigint(unittest.TestCase):
             os.killpg(pgid, 0)
 
 
+class AgentHelpTest(unittest.TestCase):
+    def test_help_agents_prints_guide_and_exits_zero(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = main(["--help-agents"])
+        self.assertEqual(code, 0)
+        text = out.getvalue()
+        for key in ("message_id", "confirmed_path", "indeterminate", "--include-quoted",
+                    "EXIT CODES", "130"):
+            self.assertIn(key, text)
+
+    def test_plain_help_points_to_agent_help(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = main(["--help"])
+        self.assertEqual(code, 0)
+        self.assertIn("--help-agents", out.getvalue())
+
+
 class RootAccessTest(unittest.TestCase):
     """An OSError reaching the root is a clean exit 2 (Codex M3 review)."""
 

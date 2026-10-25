@@ -41,7 +41,20 @@ _EPILOG = (
     "PATTERN is a Python regex, case-insensitive unless -s is given. "
     "DATE is YYYY-MM-DD or an ISO datetime; local time unless it has an "
     "offset. Exit codes: 0 found, 1 none, 2 usage or format error, 3 "
-    "results printed but the snapshot never stabilized, 130 interrupted.")
+    "results printed but the snapshot never stabilized, 130 interrupted. "
+    "Agents and scripts: see --help-agents.")
+
+
+class _AgentHelp(argparse.Action):
+    """Print the agent guide and exit 0, like --help."""
+
+    def __init__(self, option_strings, dest, **kwargs) -> None:
+        super().__init__(option_strings, dest, nargs=0, default=argparse.SUPPRESS, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None) -> None:
+        from mmgrep.agent_help import AGENT_HELP
+        sys.stdout.write(AGENT_HELP)
+        parser.exit(0)
 
 
 class _UsageError(Exception):
@@ -89,6 +102,9 @@ def _default_jobs() -> int:
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser of mmgrep (design section 7)."""
     p = _Parser(prog="mmgrep", description=_DESCRIPTION, epilog=_EPILOG)
+    p.add_argument("--help-agents", action=_AgentHelp,
+                   help="extended guide for coding agents and scripts (JSON "
+                        "schema, exit codes, semantics, recipes) and exit")
     flt = p.add_argument_group("filters")
     addr = _type(parse_addr, "ADDR")
     flt.add_argument("--from", dest="from_", action="append", default=[],

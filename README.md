@@ -120,6 +120,7 @@ Output:
 | `--all-paths` | With `--paths-only`: Every copy's path |
 | `--limit N` | Print at most N messages (after sorting by date) |
 | `-v`, `--verbose` | Table: Add to, cc and every path |
+| `--help-agents` | Print an extended guide for coding agents and scripts (JSON schema, exit codes, semantics, recipes) |
 | `-h`, `--help` | Show the help and exit |
 
 `--json` and `--paths-only` exclude each other. `--all-paths` needs `--paths-only` and `--no-confirm` cannot be combined with `--full`. `--body` may be given only once; a second one is exit 2.

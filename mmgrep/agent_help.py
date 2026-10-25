@@ -1,0 +1,101 @@
+"""Extended help for coding agents and scripts (mmgrep --help-agents)."""
+
+AGENT_HELP = """\
+mmgrep for agents and scripts
+=============================
+
+mmgrep searches a local MailMate mail store read only through MailMate's
+own index, then confirms every hit against the message's .eml file. It
+never writes to, locks or modifies anything under the MailMate folder, so
+it is safe to run while MailMate is open and as often as you like.
+
+Use --json for anything you parse. Never parse the table output.
+
+OUTPUT (--json): One JSON object per line, one line per message
+(copies of the same message in several mailboxes are merged by
+Message-ID). Sorted by date ascending.
+
+  date            ISO 8601 with UTC offset, or null
+  from, to, cc    decoded header text (strings, may be empty)
+  subject         decoded subject
+  message_id      Message-ID header including <>, or null
+  paths           every .eml path of this message (list, sorted)
+  ids             MailMate message ids of those copies (list of int)
+  confirmed       true (rechecked in the .eml), false (--no-confirm) or
+                  "indeterminate" (file could not be decoded reliably;
+                  treat as a probable hit and read the file yourself)
+  confirmed_path  the copy that confirmed, or null
+
+Other formats: --paths-only prints the first path per message
+(--all-paths: every copy), one per line. Paths contain spaces
+("Application Support"): use `tr '\\n' '\\0' | xargs -0 ...`.
+
+EXIT CODES
+  0    at least one message printed
+  1    no match (not an error)
+  2    usage or format error (bad option, bad regex, not a MailMate store,
+       unreadable store); one line on stderr
+  3    results printed but the index kept changing while it was read;
+       results may be incomplete, retry once
+  130  interrupted
+Diagnostics (unconfirmed or indeterminate counts, warnings) go to
+stderr, one line each; stdout stays clean JSON.
+
+QUERY SEMANTICS
+  Different options AND together; repeating one option ORs its values:
+    --from @a.example --from @b.example      from a OR b
+    --from @a.example --since 2026-01-01      from a AND since
+  For "X OR Y" across different options, run mmgrep twice and union the
+  results by message_id.
+
+  ADDR (--from, --to, --cc, --any-address):
+    @example.com        that domain and its subdomains
+    alice@example.com   exact address, case-insensitive
+    re:PATTERN          regex over the whole header value
+  --any-address covers From, To, Cc and Bcc. Other headers: --header.
+
+  PATTERN (--subject, --header NAME=PATTERN, --body, --account,
+  --mailbox): Python regex, case-insensitive (use -s for case-sensitive),
+  never rewritten. Quote it for the shell. Escape regex metacharacters
+  when you mean them literally ("Re: \\[ticket\\]").
+
+  --body searches unquoted body text only, like MailMate's own search.
+  Add --include-quoted to also search quoted replies (slower, finds more).
+  ^ and $ anchor at line boundaries.
+
+  Dates (--since, --until): YYYY-MM-DD or ISO datetime, local time unless
+  an offset is given. --since is inclusive; a date-only --until includes
+  that whole day. The date is the Date header, falling back to the
+  received date.
+
+  --account and --mailbox are regexes over the account name (with %40
+  shown as @) and the mailbox path such as "INBOX" or "Archive/2024".
+
+COST AND SPEED
+  Header queries: about 1 to 2 s on a store of 180,000 messages.
+  Body queries: about 4 s, 8 s with --include-quoted; narrow them with an
+  address or date filter. --limit N caps output after sorting.
+  --no-confirm skips the .eml check (faster, may include stale rows).
+  --full ignores the index and scans every .eml (minutes); use it only
+  for mail MailMate has not indexed yet.
+
+RECIPES
+  Everything with a domain in one month:
+    mmgrep --any-address @example.com --since 2026-10-01 --until 2026-10-31 --json
+  A subject regardless of encoding (RFC 2047 subjects are decoded):
+    mmgrep --subject 'quarterly report' --json
+  A body phrase from one sender, quoted replies included:
+    mmgrep --from bob@example.org --body 'contract renewal' --include-quoted --json
+  Read the matching messages:
+    mmgrep --subject 'invoice' --paths-only | tr '\\n' '\\0' | xargs -0 cat
+
+LIMITS
+  Mail MailMate has not indexed yet (seconds to minutes after arrival) is
+  invisible except to --full. Addresses with a comment or space around
+  the @ and quoted local parts are not found. Verified against MailMate
+  2.0 build 6272, index version 1.1; another version prints a warning.
+
+PRIVACY
+  Results are private mail. Do not send them to network services or
+  paste them into shared places unless the owner asks you to.
+"""
