@@ -1,0 +1,9 @@
+{
+  "domains": ["example.com", "example.org"],
+  "from_addresses": ["alice@example.net", "bob@example.net"],
+  "q2_from": "carol@example.com",
+  "q2_since": "2026-10-01",
+  "q2_until": "2026-10-31",
+  "q3_subject": "Weekly status",
+  "q4_body": "Lisbon"
+}

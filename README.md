@@ -180,6 +180,27 @@ A header query with up to about 2,000 rows stays under 2 s and a narrowed body q
 | One recipient address | 96 | 0.67 s | 0.74 s |
 | Body token narrowed by one address | 7 | 3.7 s | 3.9 s |
 
+## Verification against an exhaustive scan
+
+`tools/groundtruth.py` is an independent second implementation: It reads every `.eml` file with the stdlib `email` package (retrying with the lenient `compat32` policy where the modern parser raises) and evaluates a set of queries without using any `mmgrep` code. `tools/compare.py` runs the same queries through `bin/mmgrep --json` and diffs the Message-ID sets. The queries live in a local JSON file; `tools/acceptance.example.json` shows the shape.
+
+```
+python3 -I tools/groundtruth.py my-queries.json /tmp/truth.json
+python3 -I tools/compare.py my-queries.json /tmp/truth.json /tmp/diff.json
+```
+
+On the maintainer's store (179,059 `.eml` files, scanned in about 85 s with 4 workers) four queries were checked: Any address at three domains or From one of seven addresses (two `mmgrep` runs, unioned), one sender within one month, a non-ASCII RFC 2047 encoded subject, and a body word with the address set of the first query. Results:
+
+| Query | Exhaustive scan | `mmgrep` | Difference | `mmgrep` time |
+| --- | --- | --- | --- | --- |
+| Addresses at domains or listed senders | 301 | 301 | 0 | 2.3 s (two runs) |
+| One sender in one month | 24 | 24 | 0 | 1.4 s |
+| Encoded non-ASCII subject | 4 | 4 | 0 | 0.8 s |
+| Body word narrowed by addresses | 40 | 7 | 33 | 4.0 s |
+| The same with `--include-quoted` | 40 | 40 | 0 | 8.1 s |
+
+The body difference is by design: By default `mmgrep` searches only unquoted body text (MailMate's `#unquoted` index), while the scan searches all text. The 33 extra messages are found once MailMate's quoted-text index is included: `--include-quoted` matches the scan exactly. Every row `mmgrep` printed was confirmed against its `.eml` file (`"confirmed": true`), the scan read every file without error and `compare.py` exits 0 (PASS) only when runs succeed, all rows are confirmed and no difference is unexpected.
+
 ## Known limits
 
 - Mail MailMate has not indexed is invisible to index searches. Only `--full` sees it.
