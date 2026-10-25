@@ -1,0 +1,7 @@
+# Local only: contains real addresses and queries, never publish
+mailmate-search-spec.md
+tools/queries.local.json
+tools/*.local.*
+groundtruth/
+__pycache__/
+*.pyc
