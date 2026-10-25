@@ -41,6 +41,22 @@ EXIT CODES
 Diagnostics (unconfirmed or indeterminate counts, warnings) go to
 stderr, one line each; stdout stays clean JSON.
 
+FINDING A PERSON'S ADDRESSES (--who)
+  When you are given a person's name, not an address, resolve it first:
+    mmgrep --who 'carol jensen' --json
+  One JSON line per address, most used first:
+    {"address": "carol@example.com", "names": ["Carol Jensen", ...],
+     "messages": 812, "last": "2026-10-01T09:12:00+02:00"}
+  Every word must start a word of the display name or of the address;
+  case and accents are ignored ("soren" finds "Søren"), word order does
+  not matter and initials work ("carol j"). It takes about 2 s. Pick the
+  top address, or several when the person clearly uses more than one
+  (look at "messages" and "last"), then search with them:
+    mmgrep --from carol@example.com --from carol.j@example.net --json
+  Role addresses (support@, info@) can appear when someone sent from them
+  under their own name; they usually rank lower. --who accepts only
+  --json, --limit and --root; exit 1 means no address matched.
+
 QUERY SEMANTICS
   Different options AND together; repeating one option ORs its values:
     --from @a.example --from @b.example      from a OR b

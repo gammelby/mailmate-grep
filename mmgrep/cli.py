@@ -9,6 +9,7 @@ stderr. Exit codes follow decision D9: 130 over 2 over 3 over 0 and 1.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -23,6 +24,7 @@ from mmgrep.query import (Copy, Filters, Group, group_copies, has_filter,
 from mmgrep.query import candidates as find_candidates
 from mmgrep.scan import full_scan
 from mmgrep.store import DEFAULT_ROOT, FormatError, Store
+from mmgrep.who import WHO_INDEXES, who
 
 MAX_JOBS = 4
 EXIT_FOUND = 0
@@ -102,6 +104,11 @@ def _default_jobs() -> int:
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser of mmgrep (design section 7)."""
     p = _Parser(prog="mmgrep", description=_DESCRIPTION, epilog=_EPILOG)
+    p.add_argument("--who", metavar="NAME",
+                   help="list the addresses a person uses: every word of NAME "
+                        "must start a word of the display name or address (case "
+                        "and accents ignored); ranked by message count; works "
+                        "with --json, --limit and --root only")
     p.add_argument("--help-agents", action=_AgentHelp,
                    help="extended guide for coding agents and scripts (JSON "
                         "schema, exit codes, semantics, recipes) and exit")
@@ -335,12 +342,41 @@ def _reconfigure_stdout() -> None:
             pass
 
 
+def _run_who(args: argparse.Namespace, f: Filters) -> int:
+    """mmgrep --who NAME: The addresses matching NAME, most used first."""
+    if (has_filter(f) or args.full or args.no_confirm or args.paths_only or args.all_paths
+            or args.case_sensitive or args.include_quoted or args.verbose
+            or args.jobs is not None):
+        raise _UsageError("--who works only with --json, --limit and --root")
+    snap = Store(Path(args.root)).snapshot(WHO_INDEXES)
+    contacts = who(snap, args.who)
+    shown = contacts[:args.limit] if args.limit is not None else contacts
+    _reconfigure_stdout()
+    for c in shown:
+        last = c.last.isoformat() if c.last else None
+        if args.json:
+            print(json.dumps({"address": c.address, "names": c.top_names(),
+                              "messages": c.messages, "last": last}, ensure_ascii=False))
+        else:
+            names = c.top_names(1)
+            print(f"{c.messages:6d}  {(last or '')[:10]:10}  {c.address}"
+                  f"  {names[0] if names else ''}")
+    sys.stdout.flush()
+    for w in snap.warnings:
+        _err(f"warning: {w}")
+    if snap.unstable:
+        return EXIT_UNSTABLE
+    return EXIT_FOUND if contacts else EXIT_NONE
+
+
 def _main(argv: Optional[List[str]]) -> int:
     try:
         args = build_parser().parse_args(argv)
     except SystemExit as e:
         return e.code if isinstance(e.code, int) else EXIT_FOUND
     f = _filters(args)
+    if args.who is not None:
+        return _run_who(args, f)
     _check(args, f)
     jobs = min(MAX_JOBS, args.jobs) if args.jobs is not None else _default_jobs()
     store = Store(Path(args.root))
