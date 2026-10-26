@@ -28,6 +28,8 @@ Message-ID). Sorted by date ascending.
   flags           MailMate flags of all copies (list, e.g. "\\\\Seen",
                   "\\\\Answered", "$Forwarded", tags); null means unknown
                   (--full, or no flag index), not "no flags"
+  in_reply_to     Message-IDs in In-Reply-To (list, usually 0 or 1)
+  references      Message-IDs in References, oldest first (list)
 
 Other formats: --paths-only prints the first path per message
 (--all-paths: every copy), one per line. Paths contain spaces
@@ -84,6 +86,8 @@ QUERY SEMANTICS
   --any-address covers From, To, Cc and Bcc. Other headers: --header.
   --not-header NAME[=PATTERN] drops messages with that header (any value,
   or one matching PATTERN); repeated, it drops messages with any of them.
+  Copies are checked one by one: A message that reached you both directly
+  and through a list is kept, through its direct copy.
 
   PATTERN (--subject, --header NAME=PATTERN, --body, --account,
   --mailbox): Python regex, case-insensitive (use -s for case-sensitive),
@@ -134,12 +138,16 @@ RECIPES
   mailing lists, newsletters or bulk mail):
     mmgrep --mailbox '^INBOX$' --since 2026-10-01 --no-flag answered \\
       --no-flag forwarded --not-header list-id \\
-      --not-header list-unsubscribe --not-header 'precedence=bulk|list|junk' \\
+      --not-header list-unsubscribe \\
+      --not-header 'precedence=^(bulk|list|junk)$' \\
       --json
     then drop rows whose sender is a robot (noreply@ and the like).
   Sent mail: --mailbox 'Sent' (mailbox names differ per account; check the
   mailbox part of "paths"). Replies to one message:
     mmgrep --header 'in-reply-to=<abc@example.com>' --json
+  Was a message answered without the flag being set (reply sent from
+  another client)? Search sent mail in the same period and check whether
+  its message_id appears in a sent row's in_reply_to or references.
   Mailing lists and newsletters carry a List-Id or List-Unsubscribe header:
     mmgrep --header list-unsubscribe=. --since 2026-10-01 --json
   Read the matching messages:

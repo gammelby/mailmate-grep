@@ -479,7 +479,12 @@ class TestNotHeader(unittest.TestCase):
         stale = msg(1300, Subject="News", List_Id="<news.example.com>")
         stale.index = {"list-id": None}
         personal = msg(1400, Subject="News")
-        build_store(pathlib.Path(cls.root), [news, stale, personal])
+        # One message both direct (1500) and through a list (1600).
+        direct = msg(1500, Subject="Both", Message_ID="<both@example.com>")
+        listed = msg(1600, Subject="Both", Message_ID="<both@example.com>",
+                     List_Id="<news.example.com>")
+        listed.mailbox = "Lists"
+        build_store(pathlib.Path(cls.root), [news, stale, personal, direct, listed])
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -501,10 +506,53 @@ class TestNotHeader(unittest.TestCase):
                          [[1200], [1300], [1400]])
         self.assertEqual(self.ids("--full", "--not-header", "list-id")[0], [[1400]])
 
+    def test_copy_without_header_keeps_message(self) -> None:
+        code, out, err = run("--root", self.root, "--subject", "^Both$",
+                             "--not-header", "list-id", "--json")
+        self.assertEqual(code, 0, err)
+        obj = json.loads(out)
+        self.assertEqual(obj["message_id"], "<both@example.com>")
+        self.assertTrue(obj["confirmed_path"].endswith("/INBOX.mailbox/Messages/1500.eml"))
+
     def test_unknown_index(self) -> None:
         code, out, err = run("--root", self.root, "--not-header", "x-absent")
         self.assertEqual(code, 2)
         self.assertIn("--not-header x-absent", err)
+
+
+class TestThreadFields(unittest.TestCase):
+    """in_reply_to and references in JSON rows, from the .eml or the index."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.root = str(pathlib.Path(cls._tmp.name) / "store")
+        root = msg(1200, Subject="Question")
+        reply = msg(1300, Subject="Re: Question", In_Reply_To="<1200@example.com>",
+                    References="<1000@example.com> <1200@example.com>")
+        build_store(pathlib.Path(cls.root), [root, reply])
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._tmp.cleanup()
+
+    def test_confirmed_and_index_rows(self) -> None:
+        for extra in ((), ("--no-confirm",)):
+            with self.subTest(extra=extra):
+                code, out, err = run("--root", self.root, "--subject", "Question",
+                                     "--json", *extra)
+                self.assertEqual(code, 0, err)
+                rows = [json.loads(line) for line in out.splitlines()]
+                self.assertEqual([(r["in_reply_to"], r["references"]) for r in rows], [
+                    ([], []),
+                    (["<1200@example.com>"], ["<1000@example.com>", "<1200@example.com>"]),
+                ])
+
+    def test_replies_to_one_message(self) -> None:
+        code, out, err = run("--root", self.root, "--header",
+                             "in-reply-to=<1200@example.com>", "--json")
+        self.assertEqual(code, 0, err)
+        self.assertEqual([json.loads(line)["ids"] for line in out.splitlines()], [[1300]])
 
 
 class AgentHelpTest(unittest.TestCase):

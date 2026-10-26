@@ -18,7 +18,8 @@ from datetime import datetime, timedelta, timezone
 from mmgrep.query import (AddrSpec, Copy, Filters, Group, GroupResult,
                           addr_matches, address_tokens, candidates,
                           effective_index_date, flags_ok, group_copies,
-                          has_filter, index_headers, needed_indexes, parse_addr,
+                          has_filter, index_headers, message_ids,
+                          needed_indexes, parse_addr,
                           parse_flag, parse_header_arg, parse_index_date,
                           parse_not_header_arg,
                           parse_since, parse_until)
@@ -423,11 +424,18 @@ class GroupTest(_StoreTest):
             Subject="=?UTF-8?Q?Gr=C3=BC=C3=9Fe?= aus Berlin"))])
         expected = {"date": "", "from": "Alice <alice@example.com>",
                     "to": "bob@example.org, Carol <carol@example.net>", "cc": "",
-                    "subject": "Grüße aus Berlin", "message-id": "<1200@example.com>"}
+                    "subject": "Grüße aus Berlin", "message-id": "<1200@example.com>",
+                    "in-reply-to": "", "references": ""}
         self.assertEqual(index_headers(self.snap(Filters()), 1200), expected)
         expected["date"] = "Tue, 05 Mar 2024 14:07:09 +0100"
         self.assertEqual(index_headers(self.snap(Filters(), extra=("date",)), 1200),
                          expected)
+
+    def test_message_ids(self) -> None:
+        self.assertEqual(message_ids("<a@example.com> <b@example.org>"),
+                         ["<a@example.com>", "<b@example.org>"])
+        self.assertEqual(message_ids("Re: note <c@example.net> (sent)"), ["<c@example.net>"])
+        self.assertEqual(message_ids(""), [])
 
     def test_unmapped_source_counts(self) -> None:
         self.build([msg(1200, headers=hdr(1200, Subject="Pop"),

@@ -17,7 +17,7 @@ from mmgrep.output import Row, render, sort_rows
 PLUS_ONE = timezone(timedelta(hours=1))
 KEYS = {
     "date", "from", "to", "cc", "subject", "message_id", "paths", "ids",
-    "confirmed", "confirmed_path", "flags",
+    "confirmed", "confirmed_path", "flags", "in_reply_to", "references",
 }
 
 

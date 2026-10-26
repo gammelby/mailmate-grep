@@ -32,7 +32,8 @@ from mmgrep.query import Copy, Filters, Group, addr_matches
 CONFIRMED = "confirmed"
 REJECTED = "rejected"
 INDETERMINATE = "indeterminate"
-HEADER_KEYS = ("date", "from", "to", "cc", "subject", "message-id")
+HEADER_KEYS = ("date", "from", "to", "cc", "subject", "message-id",
+               "in-reply-to", "references")
 ADDRESS_FIELDS = (
     ("from_", ("from",)),
     ("to", ("to",)),
@@ -474,16 +475,16 @@ def _check_message(msg: Message, f: Filters, message_id: str | None,
 
 
 def decoded_headers(msg: Message) -> dict[str, str]:
-    """The date, from, to, cc, subject and message-id values of msg.
+    """The HEADER_KEYS values of msg.
 
-    Several values join with ", " and a missing header is "". Date and
-    Message-ID are the unfolded raw text; the others are RFC 2047 decoded
+    Several values join with ", " and a missing header is "". Date,
+    Message-ID, In-Reply-To and References are the unfolded raw text; the others are RFC 2047 decoded
     (decision D1), falling back to the raw UTF-8 text when undecodable.
     """
     h = _Headers(msg)
     out: dict[str, str] = {}
     for key in HEADER_KEYS:
-        if key in ("date", "message-id"):
+        if key in ("date", "message-id", "in-reply-to", "references"):
             values = [text for text, _ in h.values(key)]
         else:
             values = h.decoded(key)

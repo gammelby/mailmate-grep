@@ -42,7 +42,10 @@ ADDRESS_FIELDS = {
     "cc": ("cc",),
     "any_address": ("from", "to", "cc", "bcc"),
 }
-HEADER_KEYS = ("date", "from", "to", "cc", "subject", "message-id")
+HEADER_KEYS = ("date", "from", "to", "cc", "subject", "message-id",
+               "in-reply-to", "references")
+THREAD_INDEXES = ("in-reply-to", "references")
+_MESSAGE_ID = re.compile("<[^<>]+>")
 
 # Ruling C5: An address token is a maximal run of atext characters and
 # dots, "@" and a maximal run of host characters.
@@ -664,7 +667,7 @@ def group_copies(snap: Snapshot, ids: Iterable[int], f: Filters,
 
 
 def index_headers(snap: Snapshot, id: int) -> dict[str, str]:
-    """The index values of date, from, to, cc, subject and message-id.
+    """The index values of HEADER_KEYS.
 
     Several values join with ", "; a missing value or index is "". The
     date key reads the raw `date` index only when the snapshot holds it.
@@ -675,3 +678,8 @@ def index_headers(snap: Snapshot, id: int) -> dict[str, str]:
         values = index.values(id) if index is not None else None
         out[key] = ", ".join(_decode(v) for v in values) if values else ""
     return out
+
+
+def message_ids(text: str) -> list[str]:
+    """The <...> Message-IDs in an In-Reply-To or References value, in order."""
+    return _MESSAGE_ID.findall(text)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from typing import Iterable, List, NamedTuple, Optional, TextIO, Union
+from typing import Iterable, List, NamedTuple, Optional, Sequence, TextIO, Union
 
 FORMATS = ("table", "json", "paths")
 DATE_WIDTH = 16
@@ -27,7 +27,8 @@ class Row(NamedTuple):
     string "indeterminate". `paths` and `ids` list the copies in path
     order; `confirmed_path` is the copy that confirmed, if any. `flags`
     lists the message's flags over all its copies (None when unknown, as
-    with --full).
+    with --full). `in_reply_to` and `references` are the Message-IDs of
+    those headers.
     """
 
     date: Optional[datetime]
@@ -41,6 +42,8 @@ class Row(NamedTuple):
     confirmed: Union[bool, str]
     confirmed_path: Optional[str]
     flags: Optional[List[str]] = None
+    in_reply_to: Sequence[str] = ()
+    references: Sequence[str] = ()
 
 
 def _sort_key(row: Row) -> tuple:
@@ -129,6 +132,8 @@ def _render_json(rows: list[Row], stream: TextIO) -> None:
             "confirmed": row.confirmed,
             "confirmed_path": row.confirmed_path,
             "flags": None if row.flags is None else list(row.flags),
+            "in_reply_to": list(row.in_reply_to),
+            "references": list(row.references),
         }
         stream.write(json.dumps(obj, ensure_ascii=True) + "\n")
 

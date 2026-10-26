@@ -18,8 +18,9 @@ from typing import List, Optional
 
 from mmgrep.confirm import CONFIRMED, INDETERMINATE, REJECTED, confirm_all
 from mmgrep.output import Row, render, sort_rows
-from mmgrep.query import (FLAGS, Copy, Filters, Group, group_copies, has_filter,
-                          index_headers, needed_indexes, parse_addr, parse_flag,
+from mmgrep.query import (FLAGS, THREAD_INDEXES, Copy, Filters, Group,
+                          group_copies, has_filter, index_headers,
+                          message_ids, needed_indexes, parse_addr, parse_flag,
                           parse_header_arg, parse_not_header_arg, parse_since,
                           parse_until)
 from mmgrep.query import candidates as find_candidates
@@ -246,7 +247,8 @@ def _confirmed_row(group: Group, conf) -> Row:
     paths, ids = _paths(group)
     return Row(conf.date, h.get("from", ""), h.get("to", ""), h.get("cc", ""),
                h.get("subject", ""), group.message_id, paths, ids, True,
-               conf.copy.path, group.flags)
+               conf.copy.path, group.flags, message_ids(h.get("in-reply-to", "")),
+               message_ids(h.get("references", "")))
 
 
 def _in_range(copy: Copy, f: Filters) -> bool:
@@ -278,7 +280,8 @@ def _index_row(snap, group: Group, f: Filters, confirmed) -> Row:
     h = index_headers(snap, first.id)
     paths, ids = _paths(group)
     return Row(first.index_date, h["from"], h["to"], h["cc"], h["subject"],
-               group.message_id, paths, ids, confirmed, None, group.flags)
+               group.message_id, paths, ids, confirmed, None, group.flags,
+               message_ids(h["in-reply-to"]), message_ids(h["references"]))
 
 
 class _Outcome:
@@ -291,7 +294,7 @@ class _Outcome:
 
 
 def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool,
-               show_flags: bool) -> _Outcome:
+               rich: bool) -> _Outcome:
     names = needed_indexes(f)
     if store.database_dir.is_dir():
         known = store.index_names()
@@ -304,10 +307,12 @@ def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool,
         if FLAGS in known:
             # Only when used: #flags changes whenever mail is read, so it
             # makes a stable snapshot less likely.
-            if show_flags:
+            if rich:
                 names.add(FLAGS)
         elif f.flag or f.no_flag:
             raise _UsageError("--flag and --no-flag: MailMate has no #flags index")
+        if rich:
+            names.update(n for n in THREAD_INDEXES if n in known)
     snap = store.snapshot(names)
     cands = find_candidates(snap, f)
     grouped = group_copies(snap, cands.ids, f, store.messages_dir)
