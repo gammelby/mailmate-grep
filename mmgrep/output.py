@@ -13,6 +13,9 @@ from datetime import datetime, timezone
 from typing import Iterable, List, NamedTuple, Optional, Sequence, TextIO, Union
 
 FORMATS = ("table", "json", "paths")
+JSON_KEYS = ("date", "from", "to", "cc", "subject", "message_id", "paths", "ids",
+             "confirmed", "confirmed_path", "flags", "in_reply_to", "references",
+             "body", "body_truncated")
 DATE_WIDTH = 16
 FROM_WIDTH = 30
 SUBJECT_WIDTH = 60
@@ -121,7 +124,8 @@ def _render_table(rows: list[Row], stream: TextIO, verbose: bool) -> None:
                 stream.write("    path: " + _escape(path) + "\n")
 
 
-def _render_json(rows: list[Row], stream: TextIO, show_body: bool) -> None:
+def _render_json(rows: list[Row], stream: TextIO, show_body: bool,
+                 fields: Optional[Sequence[str]]) -> None:
     for row in rows:
         obj = {
             "date": None if row.date is None else row.date.isoformat(),
@@ -141,6 +145,8 @@ def _render_json(rows: list[Row], stream: TextIO, show_body: bool) -> None:
         if show_body:
             obj["body"] = row.body
             obj["body_truncated"] = row.body_truncated
+        if fields is not None:
+            obj = {k: obj[k] for k in fields if k in obj}
         stream.write(json.dumps(obj, ensure_ascii=True) + "\n")
 
 
@@ -163,14 +169,16 @@ def _render_paths(rows: list[Row], stream: TextIO, all_paths: bool) -> None:
 
 def render(rows: Iterable[Row], fmt: str, stream: TextIO,
            verbose: bool = False, all_paths: bool = False,
-           show_body: bool = False) -> None:
+           show_body: bool = False,
+           fields: Optional[Sequence[str]] = None) -> None:
     """Write rows to stream in fmt ("table", "json" or "paths").
 
     Rows are written in the order given; sort them with sort_rows first.
     Table output escapes non-printable characters and shows the date in
     local time. JSON output is ASCII only (decision D13). Paths output
     writes the first path of each row, or every path with all_paths.
-    JSON rows get the body and body_truncated keys with show_body.
+    JSON rows get the body and body_truncated keys with show_body; with
+    fields only those keys are written, in that order.
     Raises ValueError for an unknown fmt.
     """
     if fmt not in FORMATS:
@@ -179,6 +187,6 @@ def render(rows: Iterable[Row], fmt: str, stream: TextIO,
     if fmt == "table":
         _render_table(rows, stream, verbose)
     elif fmt == "json":
-        _render_json(rows, stream, show_body)
+        _render_json(rows, stream, show_body, fields)
     else:
         _render_paths(rows, stream, all_paths)

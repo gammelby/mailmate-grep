@@ -18,7 +18,7 @@ from typing import List, Optional
 
 from mmgrep.confirm import (BODY_CAP, CONFIRMED, INDETERMINATE, REJECTED,
                             confirm_all, display_body)
-from mmgrep.output import Row, render, sort_rows
+from mmgrep.output import JSON_KEYS, Row, render, sort_rows
 from mmgrep.query import (FLAGS, SOURCE, THREAD_INDEXES, Copy, Filters, Group,
                           group_copies, has_filter, index_headers,
                           mailbox_counts, message_ids, needed_indexes,
@@ -90,6 +90,16 @@ def _type(fn, option: str):
             raise argparse.ArgumentTypeError(message) from None
     convert.__name__ = option
     return convert
+
+
+def parse_fields(text: str) -> list[str]:
+    """The JSON keys of a --fields list, in order and without repeats."""
+    keys = list(dict.fromkeys(k.strip() for k in text.split(",")))
+    unknown = [k for k in keys if k not in JSON_KEYS]
+    if not keys or unknown:
+        raise ValueError(f"unknown key {(unknown or [text])[0]!r}; keys are "
+                         + ", ".join(JSON_KEYS))
+    return keys
 
 
 def _count(text: str) -> int:
@@ -201,6 +211,9 @@ def build_parser() -> argparse.ArgumentParser:
     out.add_argument("--body-chars", type=_type(_count, "N"), metavar="N",
                      help=f"with --show-body: cut each body at N characters "
                           f"(default {BODY_CAP})")
+    out.add_argument("--fields", type=_type(parse_fields, "KEYS"), metavar="KEYS",
+                     help="with --json: only these comma-separated keys, for "
+                          "example date,from,subject,body")
     out.add_argument("--limit", type=_type(_count, "N"), metavar="N",
                      help="print at most N messages (after sorting by date)")
     out.add_argument("-v", "--verbose", action="store_true",
@@ -512,6 +525,10 @@ def _main(argv: Optional[List[str]]) -> int:
         raise _UsageError("--show-body needs --json and a message search")
     if args.body_chars is not None and not args.show_body:
         raise _UsageError("--body-chars needs --show-body")
+    if args.fields is not None and not args.json:
+        raise _UsageError("--fields needs --json")
+    if args.fields and not args.show_body and set(args.fields) & {"body", "body_truncated"}:
+        raise _UsageError("--fields: body and body_truncated need --show-body")
     if args.who is not None:
         if args.list_mailboxes:
             raise _UsageError("--who and --list-mailboxes exclude each other")
@@ -536,7 +553,7 @@ def _main(argv: Optional[List[str]]) -> int:
     fmt = "json" if args.json else "paths" if args.paths_only else "table"
     _reconfigure_stdout()
     render(rows, fmt, sys.stdout, verbose=args.verbose, all_paths=args.all_paths,
-           show_body=args.show_body)
+           show_body=args.show_body, fields=args.fields)
     sys.stdout.flush()
     for line in o.lines:
         _err(line)

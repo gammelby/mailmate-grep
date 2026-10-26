@@ -46,10 +46,14 @@ mmgrep --mailbox '^INBOX$' --since 2026-10-19 --until 2026-10-25 \
   --not-header list-id --not-header list-unsubscribe \
   --not-header 'from=no-?reply|do-?not-?reply|notifications?@' \
   --no-reply-from me@example.com --no-reply-from me@example.net \
-  --json --show-body --body-chars 800
+  --json --show-body --body-chars 300 --fields date,from,subject,message_id,body
 ```
 
-This drops mail the user answered, forwarded, sent or replied to anywhere further down the thread, mailing lists, newsletters and robot senders. Read the JSON directly (about 50 to 70 KB for a week); do not save it to a file or write a script to reformat it. `--show-body --body-chars 800` adds the start of each message's text (quoted replies removed), which is enough to judge most mails without opening files; rerun a single message without `--body-chars` when you need all of it: Robots, receipts and FYIs need no reply; a direct question or request does. Do not write scripts to match sent mail; `--no-reply-from` already did that.
+This drops mail the user answered, forwarded, sent or replied to anywhere further down the thread, mailing lists, newsletters and robot senders. Do not write scripts to match sent mail; `--no-reply-from` already did that.
+
+`--show-body --body-chars 300` adds the start of each message's text (quoted replies removed) and `--fields` keeps only the keys you need, so a week stays around 25 KB. Read it directly; do not save it to a file or reformat it with scripts or jq. Then judge each mail: Robots, receipts and FYIs need no reply; a direct question or request does. Some newsletters put CSS in their plain-text part; skip those.
+
+To read one message in full, rerun with `--header 'message-id=<its id>' --json --show-body` (escape regex characters such as `+` in the id with a backslash).
 
 ## Showing mails in MailMate
 

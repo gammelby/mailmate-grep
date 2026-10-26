@@ -136,6 +136,21 @@ class TestMain(_StoreCase):
                 if needle:
                     self.assertIn(needle, err)
 
+    def test_fields(self) -> None:
+        code, out, err = run("--root", self.root, "--subject", "^Plan A$", "--json",
+                             "--fields", "subject, date,subject")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(list(json.loads(out).items()),
+                         [("subject", "Plan A"), ("date", "2024-03-05T14:07:09+01:00")])
+        for argv, needle in ((["--json", "--fields", "subjekt"], "unknown key 'subjekt'"),
+                             (["--json", "--fields", ""], "unknown key"),
+                             (["--fields", "subject"], "--fields needs --json"),
+                             (["--json", "--fields", "body"], "need --show-body")):
+            with self.subTest(argv=argv):
+                code, out, err = run("--root", self.root, "--subject", "Plan", *argv)
+                self.assertEqual((code, out), (2, ""), err)
+                self.assertIn(needle, err)
+
     def test_no_reply_from_without_thread_indexes(self) -> None:
         code, out, err = run("--root", self.root, "--subject", "Plan",
                              "--no-reply-from", "z@example.net", "--json")

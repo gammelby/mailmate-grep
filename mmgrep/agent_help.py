@@ -39,6 +39,7 @@ Message-ID). Sorted by date ascending.
                   unreadable or no text
   body_truncated  only with --show-body: true when body was cut at
                   20,000 characters (or --body-chars N)
+  --fields date,from,subject keeps only those keys, in that order.
 
 Other formats: --paths-only prints the first path per message
 (--all-paths: every copy), one per line. Paths contain spaces
@@ -156,9 +157,11 @@ RECIPES
       --not-header list-unsubscribe \\
       --not-header 'precedence=^(bulk|list|junk)$' \\
       --not-header 'from=no-?reply|do-?not-?reply|notifications?@' \\
-      --no-reply-from me@example.com --json --show-body --body-chars 800
-    then judge the bodies: Drop receipts and FYIs. 800 characters show the
-    request in most mails; rerun one message without --body-chars for all.
+      --no-reply-from me@example.com --json --show-body --body-chars 300 \\
+      --fields date,from,subject,message_id,body
+    then judge the bodies: Drop receipts and FYIs. 300 characters show the
+    request in most mails and keep a week near 25 KB; rerun one message
+    with --header 'message-id=<id>' --show-body for its full text.
   Mailbox names differ per account; list them first, then target one
   (sent mail, for example):
     mmgrep --list-mailboxes --json
