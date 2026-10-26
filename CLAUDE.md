@@ -7,7 +7,7 @@ Read-only command-line search over a local MailMate store using MailMate's own i
 - The code in `mmgrep/` and its tests in `tests/` are the source of truth.
 - `docs/FORMAT.md`: The reverse-engineered index format and the reader rules R1 to R11.
 - `README.md`: Usage, caveats and known limits.
-- `docs/archive/` holds stale planning records (including the original design, which "design 6a" style citations in comments refer to). Do not read it unless you need the history of one decision.
+- Citations such as "design 6a" or "ruling C4" in comments refer to internal planning records that are not in this repository; the code, `docs/FORMAT.md` and the tests are the source of truth.
 
 ## Hard rules
 

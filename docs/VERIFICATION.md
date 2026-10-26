@@ -4,11 +4,11 @@ Details behind the short "Accuracy" note in the [README](../README.md): How `mmg
 
 ## Checked against an exhaustive scan
 
-`tools/groundtruth.py` is an independent second implementation: It reads every `.eml` file with the stdlib `email` package (retrying with the lenient `compat32` policy where the modern parser raises) and evaluates a set of queries without using any `mmgrep` code. `tools/compare.py` runs the same queries through `bin/mmgrep --json` and diffs the Message-ID sets. The queries live in a local JSON file; `tools/acceptance.example.json` shows the shape.
+`tools/groundtruth.py` is an independent second implementation: It reads every `.eml` file with the stdlib `email` package (retrying with the lenient `compat32` policy where the modern parser raises) and evaluates a set of queries without using any `mmgrep` code. `tools/compare.py` runs the same queries through `bin/mmgrep --json` and diffs the Message-ID sets. The queries live in a local JSON file: Copy `tools/acceptance.example.json` to `tools/acceptance.local.json` and edit it. Files named `tools/*.local.*` are ignored by git, so your queries and results (which hold real addresses and search terms) stay out of commits.
 
 ```
-python3 -I tools/groundtruth.py my-queries.json /tmp/truth.json
-python3 -I tools/compare.py my-queries.json /tmp/truth.json /tmp/diff.json
+python3 -I tools/groundtruth.py tools/acceptance.local.json tools/truth.local.json
+python3 -I tools/compare.py tools/acceptance.local.json tools/truth.local.json tools/diff.local.json
 ```
 
 On the maintainer's store (179,059 `.eml` files) four queries were checked: Any address at three domains or From one of seven addresses (two `mmgrep` runs, unioned), one sender within one month, a non-ASCII RFC 2047 encoded subject, and a body word with the address set of the first query. The scan read every file once for all queries, in about 85 s with 4 workers. The table counts messages:

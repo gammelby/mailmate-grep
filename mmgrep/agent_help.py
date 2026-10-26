@@ -138,8 +138,9 @@ COST AND SPEED
   Body queries: about 4 s, 8 s with --include-quoted; narrow them with an
   address or date filter. --limit N caps output after sorting.
   --no-confirm skips the .eml check (faster, may include stale rows).
-  --full ignores the index and scans every .eml (minutes); use it only
-  for mail MailMate has not indexed yet.
+  --full ignores the index and scans every .eml (minutes). Use it for
+  mail MailMate has not indexed yet, for a --header with no index and
+  for body text that MailMate's index does not hold (some HTML).
 
 RECIPES
   Everything with a domain in one month:
@@ -158,7 +159,7 @@ RECIPES
       --not-header 'precedence=^(bulk|list|junk)$' \\
       --not-header 'from=no-?reply|do-?not-?reply|notifications?@' \\
       --no-reply-from me@example.com --json --show-body --body-chars 300 \\
-      --fields date,from,subject,message_id,body
+      --fields date,from,subject,message_id,confirmed,body
     then judge the bodies: Drop receipts and FYIs. 300 characters show the
     request in most mails and keep a week near 25 KB; rerun one message
     with --header 'message-id=<id>' --show-body for its full text.

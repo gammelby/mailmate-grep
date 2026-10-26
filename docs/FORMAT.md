@@ -2,7 +2,7 @@
 
 Credit: The first description of this format came from the format notes in Brian Murphy-Dye's `mailmate` Ruby gem (https://github.com/brianmd/mailmate, MIT). `mmgrep` shares no code with the gem and every fact below was re-verified against copies of real data.
 
-Citations such as "design 6a" or "design section 8" here and in code comments refer to the archived design record `docs/archive/2026-10-25-mmgrep-design.md`. This file and the code are current; the archive is not.
+Citations such as "design 6a", "design section 8", "decision D7" or "ruling C4" here and in code comments refer to the project's internal planning records, which are not part of this repository. This file and the code are the current description; each rule is stated here or next to the code that applies it.
 
 Not affiliated: `mmgrep` is an independent project with no affiliation with or endorsement by MailMate or Freron Software. MailMate is their product and name.
 

@@ -23,7 +23,7 @@ If `mmgrep` is not on PATH, tell the user and stop; do not install anything. Nev
 - **Addresses are `@domain`, `local@domain` or `re:PATTERN`.** A bare `example.com` is an error.
 - **Different options AND; repeating one option ORs.** For OR across options, run twice and union by `message_id`.
 - **Exit code 1 means nothing found**, not an error. Exit 2 is a usage error (message on stderr); exit 3 means the index changed during the read: Retry once.
-- **Stderr notes are informational.** "N indeterminate confirmations" means N rows could not be double-checked in their `.eml` file (usually odd encodings); they are still printed, so judge them like the rest.
+- **Stderr notes are informational.** "N indeterminate confirmations" means N rows could not be double-checked in their `.eml` file (usually odd encodings); they are still printed with `"confirmed": "indeterminate"`. Treat them as probable hits and say so when you report them.
 
 ## Typical searches
 
@@ -46,14 +46,14 @@ mmgrep --mailbox '^INBOX$' --since 2026-10-19 --until 2026-10-25 \
   --not-header list-id --not-header list-unsubscribe \
   --not-header 'from=no-?reply|do-?not-?reply|notifications?@' \
   --no-reply-from me@example.com --no-reply-from me@example.net \
-  --json --show-body --body-chars 300 --fields date,from,subject,message_id,body
+  --json --show-body --body-chars 300 --fields date,from,subject,message_id,confirmed,body
 ```
 
 This drops mail the user answered, forwarded, sent or replied to anywhere further down the thread, mailing lists, newsletters and robot senders. Do not write scripts to match sent mail; `--no-reply-from` already did that.
 
-`--show-body --body-chars 300` adds the start of each message's text (quoted replies removed) and `--fields` keeps only the keys you need, so a week stays around 25 KB. Read it directly; do not save it to a file or reformat it with scripts or jq. Then judge each mail: Robots, receipts and FYIs need no reply; a direct question or request does. Some newsletters put CSS in their plain-text part; skip those.
+`--show-body --body-chars 300` adds the start of each message's text (quoted replies removed) and `--fields` keeps only the keys you need, so a week stays around 25 KB. Read it directly; do not save it to a file or reformat it with scripts or jq. Then judge each mail: Robots, receipts and FYIs need no reply; a direct question or request does. Some newsletters put CSS in their plain-text part; skip those. A preview can hide a request further down, so before you call a mail from a person "no reply needed", read it in full unless the preview settles it.
 
-To read one message in full, rerun with `--header 'message-id=<its id>' --json --show-body` (escape regex characters such as `+` in the id with a backslash).
+To read one message in full, rerun with `--header 'message-id=<its id>' --json --show-body` (escape regex characters such as `+` in the id with a backslash). That still drops quoted text and stops at 20,000 characters; add `--include-quoted` when the request may sit in a quoted part, or use the Read tool on the message's `confirmed_path`.
 
 ## Showing mails in MailMate
 
