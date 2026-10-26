@@ -138,7 +138,7 @@ class TestMain(_StoreCase):
 
     def test_no_reply_from_without_thread_indexes(self) -> None:
         code, out, err = run("--root", self.root, "--subject", "Plan",
-                             "--no-reply-from", "a@example.com", "--json")
+                             "--no-reply-from", "z@example.net", "--json")
         self.assertEqual(code, 0, err)
         self.assertEqual(len(out.splitlines()), 2)
         for name in ("#flags", "in-reply-to", "references"):

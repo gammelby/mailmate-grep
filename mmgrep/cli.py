@@ -162,9 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="flag on no copy (repeated: none of them)")
     flt.add_argument("--no-reply-from", action="append", default=[], type=addr,
                      metavar="ADDR",
-                     help="drop messages that a message from ADDR replies to, "
-                          "anywhere further down the thread (index only; "
-                          "not with --full)")
+                     help="drop messages sent from ADDR or that a message "
+                          "from ADDR replies to, anywhere further down the "
+                          "thread (index only; not with --full)")
     flt.add_argument("--body", action="append", default=[], metavar="PATTERN",
                      help="regex over the unquoted body text")
     flt.add_argument("--include-quoted", action="store_true",

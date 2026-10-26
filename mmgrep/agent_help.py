@@ -167,8 +167,9 @@ RECIPES
     mmgrep --mailbox '^Sent Messages$' --since 2026-10-01 --json
   Replies to one message:
     mmgrep --header 'in-reply-to=<abc@example.com>' --json
-  --no-reply-from ADDR drops a message when a message from ADDR (not a
-  draft) lists its Message-ID in In-Reply-To or References. It is
+  --no-reply-from ADDR drops a message sent from ADDR, and one whose
+  Message-ID a message from ADDR (not a draft) lists in In-Reply-To or
+  References. It is
   computed from the index and catches replies sent from any client.
   Mailing lists and newsletters carry a List-Id or List-Unsubscribe header:
     mmgrep --header list-unsubscribe=. --since 2026-10-01 --json

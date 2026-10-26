@@ -104,8 +104,8 @@ class Filters:
     pattern "" matches any value). flag and no_flag
     hold one lowercased token set per option (parse_flag): A message
     passes when its flags meet some flag set and no no_flag set.
-    no_reply_from drops a message that a live message from one of those
-    addresses answers (reply_ids).
+    no_reply_from drops a message sent from one of those addresses or
+    answered by a live message from one of them (reply_ids).
     """
 
     from_: list[AddrSpec] = field(default_factory=list)
@@ -592,6 +592,8 @@ def candidates(snap: Snapshot, f: Filters) -> CandidateSet:
     stats["after_flags"] = len(cands)
 
     if f.no_reply_from:
+        # Mail sent from ADDR needs no reply from ADDR either.
+        cands = cands - _address_step(snap, f.no_reply_from, ("from",), flags, cands)
         answered = reply_ids(snap, f.no_reply_from, flags)
         mid_index = snap.indexes.get(MESSAGE_ID)
         if mid_index is not None:

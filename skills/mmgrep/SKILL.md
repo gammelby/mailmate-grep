@@ -23,6 +23,7 @@ If `mmgrep` is not on PATH, tell the user and stop; do not install anything. Nev
 - **Addresses are `@domain`, `local@domain` or `re:PATTERN`.** A bare `example.com` is an error.
 - **Different options AND; repeating one option ORs.** For OR across options, run twice and union by `message_id`.
 - **Exit code 1 means nothing found**, not an error. Exit 2 is a usage error (message on stderr); exit 3 means the index changed during the read: Retry once.
+- **Stderr notes are informational.** "N indeterminate confirmations" means N rows could not be double-checked in their `.eml` file (usually odd encodings); they are still printed, so judge them like the rest.
 
 ## Typical searches
 
@@ -48,7 +49,7 @@ mmgrep --mailbox '^INBOX$' --since 2026-10-19 --until 2026-10-25 \
   --json --show-body --body-chars 800
 ```
 
-This drops mail the user answered or forwarded, mail the user replied to anywhere further down the thread, mailing lists, newsletters and robot senders. `--show-body --body-chars 800` adds the start of each message's text (quoted replies removed), which is enough to judge most mails without opening files; rerun a single message without `--body-chars` when you need all of it: Robots, receipts and FYIs need no reply; a direct question or request does. Do not write scripts to match sent mail; `--no-reply-from` already did that.
+This drops mail the user answered, forwarded, sent or replied to anywhere further down the thread, mailing lists, newsletters and robot senders. Read the JSON directly (about 50 to 70 KB for a week); do not save it to a file or write a script to reformat it. `--show-body --body-chars 800` adds the start of each message's text (quoted replies removed), which is enough to judge most mails without opening files; rerun a single message without `--body-chars` when you need all of it: Robots, receipts and FYIs need no reply; a direct question or request does. Do not write scripts to match sent mail; `--no-reply-from` already did that.
 
 ## Showing mails in MailMate
 

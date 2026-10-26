@@ -507,7 +507,7 @@ class ReplyTest(_StoreTest):
             msg(2500, mailbox="Drafts", headers=hdr(2500, From=me,
                 In_Reply_To="<1500@example.com>"),
                 index={"#flags": "\\Draft \\Seen"}),
-            msg(2600, headers=hdr(2600, From="other@example.org",
+            msg(2600, headers=hdr(2600, From="other@example.net",
                 In_Reply_To="<1600@example.com>")),
         ])
 
@@ -522,12 +522,15 @@ class ReplyTest(_StoreTest):
         self._thread()
         cases = {
             "me": (["me@example.com"], {1200, 1500, 1600}),
-            "domain": (["@example.org"], {1200, 1300, 1400, 1500}),
-            "either": (["me@example.com", "other@example.org"], {1200, 1500}),
+            "own mail dropped": (["me@example.com"], {1200, 1500, 1600, 2600}),
+            "domain": (["@example.net"], {1200, 1300, 1400, 1500}),
+            "either": (["me@example.com", "other@example.net"], {1200, 1500}),
         }
         for label, (specs, expected) in cases.items():
             with self.subTest(case=label):
-                f = Filters(mailbox=["^INBOX$"], subject=["^Message 1"],
+                narrow = label != "own mail dropped"
+                f = Filters(mailbox=["^INBOX$"] if narrow else [],
+                            subject=["^Message 1"] if narrow else [],
                             no_reply_from=[parse_addr(s) for s in specs])
                 self.assertEqual(self.ids(f), expected)
 
