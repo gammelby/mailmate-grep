@@ -216,17 +216,30 @@ python3 -I tools/groundtruth.py my-queries.json /tmp/truth.json
 python3 -I tools/compare.py my-queries.json /tmp/truth.json /tmp/diff.json
 ```
 
-On the maintainer's store (179,059 `.eml` files, scanned in about 85 s with 4 workers) four queries were checked: Any address at three domains or From one of seven addresses (two `mmgrep` runs, unioned), one sender within one month, a non-ASCII RFC 2047 encoded subject, and a body word with the address set of the first query. Results:
+On the maintainer's store (179,059 `.eml` files) four queries were checked: Any address at three domains or From one of seven addresses (two `mmgrep` runs, unioned), one sender within one month, a non-ASCII RFC 2047 encoded subject, and a body word with the address set of the first query. The scan read every file once for all queries, in about 85 s with 4 workers. The table counts messages:
 
-| Query | Exhaustive scan | `mmgrep` | Difference | `mmgrep` time |
+| Query | Messages found by the scan | Messages found by `mmgrep` | Missed by `mmgrep` | `mmgrep` time |
 | --- | --- | --- | --- | --- |
-| Addresses at domains or listed senders | 301 | 301 | 0 | 2.3 s (two runs) |
-| One sender in one month | 24 | 24 | 0 | 1.4 s |
-| Encoded non-ASCII subject | 4 | 4 | 0 | 0.8 s |
+| Addresses at domains or listed senders | 301 | 301 | none | 2.3 s (two runs) |
+| One sender in one month | 24 | 24 | none | 1.4 s |
+| Encoded non-ASCII subject | 4 | 4 | none | 0.8 s |
 | Body word narrowed by addresses | 40 | 7 | 33 | 4.0 s |
-| The same with `--include-quoted` | 40 | 40 | 0 | 8.1 s |
+| The same with `--include-quoted` | 40 | 40 | none | 8.1 s |
 
-The body difference is by design: By default `mmgrep` searches only unquoted body text (MailMate's `#unquoted` index), while the scan searches all text. The 33 extra messages are found once MailMate's quoted-text index is included: `--include-quoted` matches the scan exactly. Every row `mmgrep` printed was confirmed against its `.eml` file (`"confirmed": true`), the scan read every file without error and `compare.py` exits 0 (PASS) only when runs succeed, all rows are confirmed and no difference is unexpected.
+The 33 missed in the body row are by design: By default `mmgrep` searches only unquoted body text (MailMate's `#unquoted` index), while the scan searches all text. The 33 extra messages are found once MailMate's quoted-text index is included: `--include-quoted` matches the scan exactly. Every row `mmgrep` printed was confirmed against its `.eml` file (`"confirmed": true`), the scan read every file without error and `compare.py` exits 0 (PASS) only when runs succeed, all rows are confirmed and no difference is unexpected.
+
+### Speed compared with a plain scan
+
+One common body word (`invoice`) searched three ways on the same store and laptop. Counts differ because the methods look at different things; the notes say what each one counts.
+
+| Method | Time | Found |
+| --- | --- | --- |
+| `grep -r -i -F invoice` over every `.eml` file | 593 s | 7,160 files. Raw bytes: Headers, HTML markup and every copy of a message count, while base64-encoded bodies are missed |
+| `mmgrep --full --body invoice` (decodes every file) | 228 s | 4,328 messages, plus 536 it could not decide because their MIME structure is broken |
+| `mmgrep --body invoice` (MailMate's index) | 13.7 s | 4,300 messages |
+| The same with `--since 2026-10-01` | 5.7 s | 146 messages |
+
+`grep` ran first and may have started with a colder disk cache than the runs after it. The index search and the full scan agree on 4,292 messages. 36 were found only by the full scan: The word is in the mail, mostly in HTML, but MailMate's index does not hold that text. 8 were found only through the index.
 
 ## Known limits
 
