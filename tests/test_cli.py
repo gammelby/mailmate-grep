@@ -25,7 +25,7 @@ import unittest
 from unittest import mock
 
 from mmgrep.cli import main
-from mmgrep.confirm import INDETERMINATE, Confirmation
+from mmgrep.confirm import INDETERMINATE, Confirmation, display_body
 from mmgrep.store import Store
 from tests.fixtures import FixtureMessage, build_store
 
@@ -645,3 +645,84 @@ class RootAccessTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestShowBody(unittest.TestCase):
+    """--show-body: The main body of each printed row, quoted text removed."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.root = str(pathlib.Path(cls._tmp.name) / "store")
+        plain = msg(1200, Subject="Plain")
+        plain.body = ["First line", "Second line"]
+        plain.quoted = ["Earlier text"]
+        html = msg(1300, Subject="Html")
+        html.content_type = "text/html"
+        html.body = ["Hello <you>", "Bye"]
+        html.quoted = ["Quoted html"]
+        alt = msg(1400, Subject="Alternative")
+        alt.multipart = "alternative"
+        alt.body = []
+        alt.parts = [FixtureMessage.Part(content_type="text/html", body=["Html part"]),
+                     FixtureMessage.Part(content_type="text/plain", body=["Plain part"])]
+        attach = msg(1500, Subject="Attachment only")
+        attach.body = []
+        attach.parts = [FixtureMessage.Part(content_type="application/pdf",
+                                            content=b"%PDF", filename="a.pdf")]
+        footer = msg(1700, Subject="Footer")
+        footer.body = []
+        footer.parts = [FixtureMessage.Part(content_type="text/html", body=["Real body"]),
+                        FixtureMessage.Part(content_type="text/plain", body=["List footer"])]
+        odd = msg(1800, Subject="Odd charset")
+        odd.body = []
+        odd.parts = [FixtureMessage.Part(content=b"caf\xc3\xa9", charset="x-unknown-8bit")]
+        long = msg(1600, Subject="Long")
+        long.body = ["x" * 20005]
+        build_store(pathlib.Path(cls.root), [plain, html, alt, attach, footer, odd, long])
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._tmp.cleanup()
+
+    def rows(self, *argv: str) -> dict:
+        code, out, err = run("--root", self.root, "--json", "--show-body", *argv)
+        self.assertEqual(code, 0, err)
+        return {r["subject"]: r for r in map(json.loads, out.splitlines())}
+
+    def test_bodies(self) -> None:
+        rows = self.rows("--any-address", "user@example.com")
+        got = {s: (r["body"], r["body_truncated"]) for s, r in rows.items()
+               if s != "Long"}
+        self.assertEqual(got, {
+            "Plain": ("First line\n\nSecond line", False),
+            "Html": ("Hello <you>\n\nBye", False),
+            "Alternative": ("Plain part", False),
+            "Attachment only": (None, False),
+            "Footer": ("Real body", False),
+            "Odd charset": ("caf\u00e9", False),
+        })
+        self.assertEqual((len(rows["Long"]["body"]), rows["Long"]["body_truncated"]),
+                         (20000, True))
+
+    def test_include_quoted(self) -> None:
+        rows = self.rows("--subject", "^(Plain|Html)$", "--include-quoted")
+        self.assertEqual(rows["Plain"]["body"], "First line\n\nSecond line\n\n> Earlier text")
+        self.assertEqual(rows["Html"]["body"], "Hello <you>\n\nBye\n\nQuoted html")
+
+    def test_unreadable_file_is_null(self) -> None:
+        self.assertEqual(display_body(str(pathlib.Path(self.root) / "absent.eml"), True),
+                         (None, False))
+
+    def test_keys_absent_without_option(self) -> None:
+        code, out, err = run("--root", self.root, "--json", "--subject", "^Plain$")
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("body", json.loads(out))
+
+    def test_usage_errors(self) -> None:
+        for argv in (["--subject", "x"], ["--subject", "x", "--paths-only"],
+                     ["--json", "--who", "a"], ["--json", "--list-mailboxes"]):
+            with self.subTest(argv=argv):
+                code, out, err = run("--root", self.root, "--show-body", *argv)
+                self.assertEqual((code, out), (2, ""), err)
+                self.assertIn("--show-body", err)

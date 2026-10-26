@@ -390,6 +390,69 @@ def body_texts(msg: Message, strip_quoted: bool) -> tuple[list[str], bool]:
     return texts, lossy
 
 
+BODY_CAP = 20000
+_BLANK_RUN = re.compile(r"\n[ \t]*(?:\n[ \t]*)+\n")
+
+
+def _main_part(part: Message) -> Message | None:
+    """The first text part in document order that is not an attachment.
+
+    Inside multipart/alternative a plain part wins over HTML. Unlike
+    email's get_body, a plain part later in the tree (a list footer, an
+    inline .txt) never beats an earlier HTML body.
+    """
+    if part.is_attachment():
+        return None
+    if part.is_multipart():
+        found = []
+        for child in part.get_payload():
+            hit = _main_part(child)
+            if hit is not None:
+                if part.get_content_type() != "multipart/alternative":
+                    return hit
+                found.append(hit)
+        plain = [p for p in found if p.get_content_type() == "text/plain"]
+        return (plain or found or [None])[0]
+    return part if part.get_content_type() in _TEXT_TYPES else None
+
+
+def _part_text(part: Message) -> str:
+    """Decoded text of one leaf; an unknown or wrong charset is replaced."""
+    payload = part.get_payload(decode=True) or b""
+    charset = part.get_content_charset() or "us-ascii"
+    try:
+        return payload.decode(charset)
+    except (LookupError, UnicodeDecodeError):
+        return payload.decode("utf-8", "replace")
+
+
+def display_body(path: str, strip_quoted: bool) -> tuple[str | None, bool]:
+    """The main body of one `.eml` as text to show, and whether it was cut.
+
+    The main body is chosen by _main_part. HTML becomes text with block
+    boundaries as line breaks. With strip_quoted, quoted text is dropped
+    as for --body (decision D4). Runs of blank lines shrink to one and the
+    text is cut at BODY_CAP characters. None when the file cannot be read
+    or has no text body.
+    """
+    try:
+        part = _main_part(read_message(path, True))
+        if part is None:
+            return None, False
+        text = _part_text(part).replace("\r\n", "\n")
+        if part.get_content_type() == "text/html":
+            text = _html_variants(text, strip_quoted)[0]
+        elif strip_quoted:
+            text = _strip_quoted_lines(text)
+    except Exception:
+        # OSError or a broken MIME tree, for example.
+        return None, False
+    text = _BLANK_RUN.sub("\n\n", text).strip()
+    if len(text) > BODY_CAP:
+        return text[:BODY_CAP], True
+    return text, False
+
+
 def _check_body(msg: Message, f: Filters, strip_quoted: bool) -> bool | None:
     flags = re.MULTILINE | (0 if f.case_sensitive else re.IGNORECASE)
     pattern = re.compile(f.body, flags)

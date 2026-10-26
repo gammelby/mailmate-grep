@@ -28,7 +28,8 @@ class Row(NamedTuple):
     order; `confirmed_path` is the copy that confirmed, if any. `flags`
     lists the message's flags over all its copies (None when unknown, as
     with --full). `in_reply_to` and `references` are the Message-IDs of
-    those headers (None when unknown).
+    those headers (None when unknown). `body` and `body_truncated` are
+    filled in for --show-body.
     """
 
     date: Optional[datetime]
@@ -44,6 +45,8 @@ class Row(NamedTuple):
     flags: Optional[List[str]] = None
     in_reply_to: Optional[Sequence[str]] = None
     references: Optional[Sequence[str]] = None
+    body: Optional[str] = None
+    body_truncated: bool = False
 
 
 def _sort_key(row: Row) -> tuple:
@@ -118,7 +121,7 @@ def _render_table(rows: list[Row], stream: TextIO, verbose: bool) -> None:
                 stream.write("    path: " + _escape(path) + "\n")
 
 
-def _render_json(rows: list[Row], stream: TextIO) -> None:
+def _render_json(rows: list[Row], stream: TextIO, show_body: bool) -> None:
     for row in rows:
         obj = {
             "date": None if row.date is None else row.date.isoformat(),
@@ -135,6 +138,9 @@ def _render_json(rows: list[Row], stream: TextIO) -> None:
             "in_reply_to": None if row.in_reply_to is None else list(row.in_reply_to),
             "references": None if row.references is None else list(row.references),
         }
+        if show_body:
+            obj["body"] = row.body
+            obj["body_truncated"] = row.body_truncated
         stream.write(json.dumps(obj, ensure_ascii=True) + "\n")
 
 
@@ -156,13 +162,15 @@ def _render_paths(rows: list[Row], stream: TextIO, all_paths: bool) -> None:
 
 
 def render(rows: Iterable[Row], fmt: str, stream: TextIO,
-           verbose: bool = False, all_paths: bool = False) -> None:
+           verbose: bool = False, all_paths: bool = False,
+           show_body: bool = False) -> None:
     """Write rows to stream in fmt ("table", "json" or "paths").
 
     Rows are written in the order given; sort them with sort_rows first.
     Table output escapes non-printable characters and shows the date in
     local time. JSON output is ASCII only (decision D13). Paths output
     writes the first path of each row, or every path with all_paths.
+    JSON rows get the body and body_truncated keys with show_body.
     Raises ValueError for an unknown fmt.
     """
     if fmt not in FORMATS:
@@ -171,6 +179,6 @@ def render(rows: Iterable[Row], fmt: str, stream: TextIO,
     if fmt == "table":
         _render_table(rows, stream, verbose)
     elif fmt == "json":
-        _render_json(rows, stream)
+        _render_json(rows, stream, show_body)
     else:
         _render_paths(rows, stream, all_paths)

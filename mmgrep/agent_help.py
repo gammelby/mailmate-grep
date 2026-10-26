@@ -33,6 +33,12 @@ Message-ID). Sorted by date ascending.
                   that could not be confirmed
   references      every <...> Message-ID in References, oldest first
                   (list); null when unknown
+  body            only with --show-body: the main body as text (first
+                  text part, plain over HTML in an alternative; quoted
+                  text removed unless --include-quoted); null when
+                  unreadable or no text
+  body_truncated  only with --show-body: true when body was cut at
+                  20,000 characters
 
 Other formats: --paths-only prints the first path per message
 (--all-paths: every copy), one per line. Paths contain spaces
@@ -162,6 +168,8 @@ RECIPES
   its message_id appears in a sent row's in_reply_to or references.
   Mailing lists and newsletters carry a List-Id or List-Unsubscribe header:
     mmgrep --header list-unsubscribe=. --since 2026-10-01 --json
+  Read what you sent on one day, quoted text removed:
+    mmgrep --from me@example.com --since 2026-10-23 --until 2026-10-23 --json --show-body
   Read the matching messages:
     mmgrep --subject 'invoice' --paths-only | tr '\\n' '\\0' | xargs -0 cat
 
