@@ -57,6 +57,16 @@ FINDING A PERSON'S ADDRESSES (--who)
   under their own name; they usually rank lower. --who accepts only
   --json, --limit and --root; exit 1 means no address matched.
 
+SHOWING RESULTS IN MAILMATE (--open)
+  Add --open to any search to also show the results inside MailMate as
+  a search for their Message-IDs (first 50 messages):
+    mmgrep --from carol@example.com --subject 'contract' --open
+  Use it when the user wants to see, read or act on the mails in
+  MailMate. MailMate searches its selected mailbox: tell the user to
+  select "All Messages" if fewer messages appear than mmgrep printed.
+  A stderr line says how many were opened. One message alone also opens
+  with: open "message://%3C<message-id>%3E" (brackets URL-encoded).
+
 QUERY SEMANTICS
   Different options AND together; repeating one option ORs its values:
     --from @a.example --from @b.example      from a OR b

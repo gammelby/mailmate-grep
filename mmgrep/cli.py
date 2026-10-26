@@ -24,6 +24,7 @@ from mmgrep.query import (Copy, Filters, Group, group_copies, has_filter,
 from mmgrep.query import candidates as find_candidates
 from mmgrep.scan import full_scan
 from mmgrep.store import DEFAULT_ROOT, FormatError, Store
+from mmgrep.mailmate_ui import MAX_IDS, open_url, search_url
 from mmgrep.who import WHO_INDEXES, who
 
 MAX_JOBS = 4
@@ -154,6 +155,10 @@ def build_parser() -> argparse.ArgumentParser:
                           f"(default {_default_jobs()})")
     run.add_argument("--root", default=str(DEFAULT_ROOT), metavar="PATH",
                      help="MailMate data root (default %(default)s)")
+    run.add_argument("--open", action="store_true",
+                     help="also show the results in MailMate as a search for "
+                          f"their Message-IDs (first {MAX_IDS}; MailMate searches "
+                          "its selected mailbox, so select All Messages)")
 
     out = p.add_argument_group("output")
     fmt = out.add_mutually_exclusive_group()
@@ -342,11 +347,27 @@ def _reconfigure_stdout() -> None:
             pass
 
 
+def _open_in_mailmate(rows: List[Row]) -> None:
+    """--open: One line on stderr says what MailMate was asked to show."""
+    url, used, skipped = search_url(r.message_id for r in rows)
+    if url is None:
+        _err("--open: no result has a usable Message-ID")
+        return
+    code = open_url(url)
+    note = f"; {skipped} without a usable Message-ID" if skipped else ""
+    more = len(rows) - used - skipped
+    extra = f"; only the first {used} of {len(rows)}" if more > 0 else ""
+    if code == 0:
+        _err(f"opened {used} messages as a MailMate search{extra}{note}")
+    else:
+        _err(f"--open: /usr/bin/open exited {code}")
+
+
 def _run_who(args: argparse.Namespace, f: Filters) -> int:
     """mmgrep --who NAME: The addresses matching NAME, most used first."""
     if (has_filter(f) or args.full or args.no_confirm or args.paths_only or args.all_paths
             or args.case_sensitive or args.include_quoted or args.verbose
-            or args.jobs is not None):
+            or args.jobs is not None or args.open):
         raise _UsageError("--who works only with --json, --limit and --root")
     snap = Store(Path(args.root)).snapshot(WHO_INDEXES)
     contacts = who(snap, args.who)
@@ -394,6 +415,8 @@ def _main(argv: Optional[List[str]]) -> int:
     sys.stdout.flush()
     for line in o.lines:
         _err(line)
+    if args.open and rows:
+        _open_in_mailmate(rows)
     if o.unstable:
         return EXIT_UNSTABLE
     return EXIT_FOUND if found else EXIT_NONE

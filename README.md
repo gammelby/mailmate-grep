@@ -16,7 +16,7 @@ It needs only the Python 3 standard library (3.9 or later) and runs straight fro
 
 **Safety promise.** `mmgrep` is strictly read-only. It never writes, renames, deletes or creates anything under the MailMate folder. It takes no locks of any kind (no `flock`, no `fcntl`, no lock files) and does not use `mmap`. Every file is opened with `open(path, "rb")`, read and closed before the next one. Worker processes are capped at 4. Read-only access cannot rule out some disk or memory contention while a search runs. It cannot corrupt MailMate's data or keep an arriving message from being written.
 
-How this is tested: `tests/test_safety.py` builds a synthetic store, records the content hash, size, mode and mtime of every path in it, runs the package's read operations and every CLI mode (index, `--body`, `--full`, `--no-confirm`) and asserts that nothing changed and no path appeared. A static scan of the package source fails on any forbidden call (file locks, `mmap`, writes, renames, deletes, `chmod`, `utime`, extended attributes, temp files, subprocesses) and on any `open()` other than `open(path, "rb")`.
+How this is tested: `tests/test_safety.py` builds a synthetic store, records the content hash, size, mode and mtime of every path in it, runs the package's read operations and every CLI mode (index, `--body`, `--full`, `--no-confirm`) and asserts that nothing changed and no path appeared. A static scan of the package source fails on any forbidden call (file locks, `mmap`, writes, renames, deletes, `chmod`, `utime`, extended attributes, temp files, subprocesses) and on any `open()` other than `open(path, "rb")`. The one exception is `mmgrep/mailmate_ui.py`, used only by `--open`: It runs `/usr/bin/open` with an `mlmt:quicksearch` URL and nothing else, which a dedicated test pins.
 
 **Not a backup and no warranty.** `mmgrep` is not a replacement for backups of your mail. It comes with no warranty of any kind; see [LICENSE](LICENSE).
 
@@ -110,6 +110,7 @@ Search:
 | `--no-confirm` | Trust the index and skip the `.eml` recheck (not with `--full`) |
 | `--jobs N` | Worker processes, clamped to 4 (default: The CPU count, at most 4) |
 | `--root PATH` | MailMate data root (default `~/Library/Application Support/MailMate`) |
+| `--open` | Also show the results in MailMate: Opens an `mlmt:quicksearch` URL that searches for their Message-IDs (the first 50). MailMate searches its selected mailbox, so select "All Messages" first. `mlmt:quicksearch` is undocumented; it was found in the MailMate 2.0 binary and works there |
 
 Output:
 
