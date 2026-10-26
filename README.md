@@ -1,5 +1,9 @@
 # mmgrep
 
+<p align="center"><img src="docs/images/claude-code-triage.svg" width="820" alt="Claude Code loads the mmgrep skill, runs one mmgrep query and lists the two mails from last week that still need a reply, with what each sender asked"></p>
+
+<p align="center"><em>Claude Code finding mail that still needs a reply with mmgrep (made-up names; see <a href="#using-it-with-claude-code-and-other-agents">Using it with Claude Code</a>).</em></p>
+
 `mmgrep` is a read-only command-line search over a local [MailMate](https://freron.com) mail store. It answers questions such as "every message from anyone at example.com since March" or "every message whose body mentions an invoice number" from MailMate's own index files in seconds and then confirms each hit against the message's `.eml` file.
 
 It needs only the Python 3 standard library (3.9 or later) and runs straight from a checkout. Nothing is installed.

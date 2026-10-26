@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="474" viewBox="0 0 820 474" role="img" aria-labelledby="t d">
+  <title id="t">Claude Code using mmgrep to find mail that still needs a reply</title>
+  <desc id="d">A user asks Claude Code which mails from last week still need a reply. Claude loads the mmgrep skill, runs one mmgrep query and answers with two mails that need a reply, each with what the sender asked, and one that possibly does. All names are made up.</desc>
+  <style>
+    text { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 13.5px; fill: #e8e8ee; white-space: pre; }
+    .dim { fill: #9a9ab0; }
+    .b { font-weight: 700; fill: #ffffff; }
+    .tool { fill: #4ec27a; }
+    .num { fill: #e8a35a; }
+  </style>
+  <rect width="820" height="474" rx="12" fill="#21223d"/>
+  <rect width="820" height="34" rx="12" fill="#191a30"/>
+  <rect y="22" width="820" height="12" fill="#191a30"/>
+  <circle cx="20" cy="17" r="6" fill="#ff5f56"/>
+  <circle cx="40" cy="17" r="6" fill="#ffbd2e"/>
+  <circle cx="60" cy="17" r="6" fill="#27c93f"/>
+
+  <rect x="0" y="50" width="820" height="26" fill="#3a3a3e"/>
+  <text x="16" y="68">❯ which mails from last week still need a reply from me?</text>
+
+  <text x="16" y="104"><tspan class="tool">●</tspan> <tspan class="b">Skill</tspan>(mmgrep)</text>
+  <text x="16" y="124" class="dim">  ⎿  Successfully loaded skill</text>
+
+  <text x="16" y="156"><tspan class="tool">●</tspan> <tspan class="b">Bash</tspan>(mmgrep --mailbox '^INBOX$' --since 2026-10-19 --until 2026-10-25</text>
+  <text x="16" y="176">       --no-flag answered --no-flag forwarded --not-header list-id</text>
+  <text x="16" y="196">       --no-reply-from me@example.com --json --show-body --body-chars 300)</text>
+  <text x="16" y="216" class="dim">  ⎿  38 messages</text>
+
+  <text x="16" y="248"><tspan class="b">●</tspan> Two mails from last week still need a reply from you:</text>
+
+  <text x="16" y="280">  <tspan class="num">1.</tspan> <tspan class="b">Carol Jensen (Example Labs), October 21st:</tspan> "Contract renewal"</text>
+  <text x="16" y="300">     Their order is on hold until you confirm the new terms. She asks</text>
+  <text x="16" y="320">     which plan applies and whether you can sign by Friday.</text>
+  <text x="16" y="344">  <tspan class="num">2.</tspan> <tspan class="b">Bob Lee (Example Corp), October 23rd:</tspan> "Slow connection issue"</text>
+  <text x="16" y="364">     He can reproduce it and asks how to collect the logs.</text>
+
+  <text x="16" y="396">  <tspan class="b">Possibly:</tspan> Erik Holm (October 19th) sent the decisions from your</text>
+  <text x="16" y="416">  planning call. No question in it; reply only if you disagree.</text>
+
+  <text x="16" y="448" class="dim">  The other 35 are receipts, alerts, calendar updates and thank-yous.</text>
+</svg>
