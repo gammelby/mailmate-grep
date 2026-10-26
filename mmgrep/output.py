@@ -25,7 +25,9 @@ class Row(NamedTuple):
 
     `confirmed` is True, False (not checked, as with --no-confirm) or the
     string "indeterminate". `paths` and `ids` list the copies in path
-    order; `confirmed_path` is the copy that confirmed, if any.
+    order; `confirmed_path` is the copy that confirmed, if any. `flags`
+    lists the message's flags over all its copies (None when unknown, as
+    with --full).
     """
 
     date: Optional[datetime]
@@ -38,6 +40,7 @@ class Row(NamedTuple):
     ids: List[int]
     confirmed: Union[bool, str]
     confirmed_path: Optional[str]
+    flags: Optional[List[str]] = None
 
 
 def _sort_key(row: Row) -> tuple:
@@ -106,6 +109,8 @@ def _render_table(rows: list[Row], stream: TextIO, verbose: bool) -> None:
         if verbose:
             stream.write("    to: " + _escape(row.to) + "\n")
             stream.write("    cc: " + _escape(row.cc) + "\n")
+            if row.flags is not None:
+                stream.write("    flags: " + _escape(" ".join(row.flags)) + "\n")
             for path in row.paths:
                 stream.write("    path: " + _escape(path) + "\n")
 
@@ -123,6 +128,7 @@ def _render_json(rows: list[Row], stream: TextIO) -> None:
             "ids": list(row.ids),
             "confirmed": row.confirmed,
             "confirmed_path": row.confirmed_path,
+            "flags": None if row.flags is None else list(row.flags),
         }
         stream.write(json.dumps(obj, ensure_ascii=True) + "\n")
 

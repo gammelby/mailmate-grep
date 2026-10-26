@@ -26,6 +26,7 @@ from unittest import mock
 
 from mmgrep.cli import main
 from mmgrep.confirm import INDETERMINATE, Confirmation
+from mmgrep.store import Store
 from tests.fixtures import FixtureMessage, build_store
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
@@ -117,6 +118,9 @@ class TestMain(_StoreCase):
             (["--from", "example.com"], None),
             (["--full", "--no-confirm", "--subject", "Plan"], None),
             (["--body", "a", "--body", "b"], "mmgrep: --body given more than once"),
+            (["--flag", "a b"], "invalid flag"),
+            (["--no-flag", "answered"], "no #flags index"),
+            (["--full", "--flag", "seen", "--subject", "Plan"], "not with --full"),
         ]
         for argv, needle in cases:
             with self.subTest(argv=argv):
@@ -401,6 +405,66 @@ class TestSigint(unittest.TestCase):
         time.sleep(1)
         with self.assertRaises(ProcessLookupError, msg="a child process survived"):
             os.killpg(pgid, 0)
+
+
+class TestFlags(unittest.TestCase):
+    """--flag, --no-flag and the flags of each row on a store with #flags."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.root = str(pathlib.Path(cls._tmp.name) / "store")
+        answered = msg(1300, Subject="Asked")
+        answered.index = {"#flags": "\\Seen"}
+        archived = msg(1500, Subject="Asked", Message_ID="<1300@example.com>")
+        archived.mailbox, archived.index = "Archive", {"#flags": "\\Answered \\Seen"}
+        open_ = msg(1400, Subject="Open")
+        open_.index = {"#flags": "\\Seen $MailFlagBit0"}
+        build_store(pathlib.Path(cls.root), [answered, archived, open_])
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._tmp.cleanup()
+
+    def test_no_flag_uses_every_copy(self) -> None:
+        code, out, err = run("--root", self.root, "--mailbox", "^INBOX$",
+                             "--no-flag", "answered", "--json")
+        self.assertEqual(code, 0, err)
+        rows = [json.loads(line) for line in out.splitlines()]
+        self.assertEqual([(r["subject"], r["flags"]) for r in rows],
+                         [("Open", ["$MailFlagBit0", "\\Seen"])])
+
+    def test_flag_row_lists_union(self) -> None:
+        code, out, err = run("--root", self.root, "--flag", "\\answered", "--json")
+        self.assertEqual(code, 0, err)
+        obj = json.loads(out)
+        self.assertEqual((obj["ids"], obj["flags"]), ([1500, 1300], ["\\Answered", "\\Seen"]))
+
+    def test_verbose_table_flags_line(self) -> None:
+        code, out, err = run("--root", self.root, "--flag", "$mailflagbit0", "-v")
+        self.assertEqual(code, 0, err)
+        self.assertIn("    flags: $MailFlagBit0 \\Seen\n", out)
+
+    def test_flags_null_without_index(self) -> None:
+        store =tempfile.TemporaryDirectory()
+        self.addCleanup(store.cleanup)
+        build_store(pathlib.Path(store.name), [msg(1200, Subject="Plain")])
+        code, out, err = run("--root", store.name, "--subject", "^Plain$", "--json")
+        self.assertEqual(code, 0, err)
+        self.assertIsNone(json.loads(out)["flags"])
+        self.assertNotIn("#flags", err)
+
+    def test_flags_read_only_when_used(self) -> None:
+        seen = []
+        real = Store.snapshot
+
+        def spy(store, names, *a, **kw):
+            seen.append(set(names))
+            return real(store, names, *a, **kw)
+        with mock.patch.object(Store, "snapshot", spy):
+            run("--root", self.root, "--subject", "Open")
+            run("--root", self.root, "--subject", "Open", "--json")
+        self.assertEqual(["#flags" in n for n in seen], [False, True])
 
 
 class AgentHelpTest(unittest.TestCase):

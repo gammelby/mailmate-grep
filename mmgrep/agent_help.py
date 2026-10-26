@@ -25,6 +25,9 @@ Message-ID). Sorted by date ascending.
                   "indeterminate" (file could not be decoded reliably;
                   treat as a probable hit and read the file yourself)
   confirmed_path  the copy that confirmed, or null
+  flags           MailMate flags of all copies (list, e.g. "\\\\Seen",
+                  "\\\\Answered", "$Forwarded", tags); null means unknown
+                  (--full, or no flag index), not "no flags"
 
 Other formats: --paths-only prints the first path per message
 (--all-paths: every copy), one per line. Paths contain spaces
@@ -97,6 +100,19 @@ QUERY SEMANTICS
   --account and --mailbox are regexes over the account name (with %40
   shown as @) and the mailbox path such as "INBOX" or "Archive/2024".
 
+FLAGS AND TAGS (--flag, --no-flag)
+  --flag NAME keeps a message when any copy has the flag; --no-flag NAME
+  keeps it when no copy has it. Repeated --flag: any of them; repeated
+  --no-flag: none of them. NAME is seen, answered, flagged, draft,
+  deleted, forwarded, junk, a raw IMAP flag (quoted for the shell:
+  '\\Seen'; $MailFlagBit0 and up are flag colors) or a MailMate tag
+  (tag:NAME for a tag named like an alias, such as tag:seen). Case is
+  ignored. Flags come from the index only (an .eml has none): A
+  change made seconds ago may not show. Not with --full.
+  "Answered" means a reply was sent from MailMate or another IMAP client
+  that sets the flag; a reply sent elsewhere, by phone or chat, does not
+  set it.
+
 COST AND SPEED
   Header queries: about 1 to 2 s on a store of 180,000 messages.
   Body queries: about 4 s, 8 s with --include-quoted; narrow them with an
@@ -112,6 +128,15 @@ RECIPES
     mmgrep --subject 'quarterly report' --json
   A body phrase from one sender, quoted replies included:
     mmgrep --from bob@example.org --body 'contract renewal' --include-quoted --json
+  Inbox mail that may still need a reply (not answered or forwarded):
+    mmgrep --mailbox '^INBOX$' --since 2026-10-01 --no-flag answered \\
+      --no-flag forwarded --json
+    then drop rows whose sender is a robot (noreply@ and the like).
+  Sent mail: --mailbox 'Sent' (mailbox names differ per account; check the
+  mailbox part of "paths"). Replies to one message:
+    mmgrep --header 'in-reply-to=<abc@example.com>' --json
+  Mailing lists and newsletters carry a List-Id or List-Unsubscribe header:
+    mmgrep --header list-unsubscribe=. --since 2026-10-01 --json
   Read the matching messages:
     mmgrep --subject 'invoice' --paths-only | tr '\\n' '\\0' | xargs -0 cat
 

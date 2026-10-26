@@ -18,8 +18,8 @@ from typing import List, Optional
 
 from mmgrep.confirm import CONFIRMED, INDETERMINATE, REJECTED, confirm_all
 from mmgrep.output import Row, render, sort_rows
-from mmgrep.query import (Copy, Filters, Group, group_copies, has_filter,
-                          index_headers, needed_indexes, parse_addr,
+from mmgrep.query import (FLAGS, Copy, Filters, Group, group_copies, has_filter,
+                          index_headers, needed_indexes, parse_addr, parse_flag,
                           parse_header_arg, parse_since, parse_until)
 from mmgrep.query import candidates as find_candidates
 from mmgrep.scan import full_scan
@@ -138,6 +138,16 @@ def build_parser() -> argparse.ArgumentParser:
                      help="regex over the account name")
     flt.add_argument("--mailbox", action="append", default=[], metavar="PATTERN",
                      help="regex over the mailbox path")
+    flag = _type(parse_flag, "NAME")
+    flt.add_argument("--flag", action="append", default=[], type=flag,
+                     metavar="NAME",
+                     help="flag on any copy: seen, answered, flagged, draft, "
+                          "deleted, forwarded, junk, a raw flag such as "
+                          "\\Seen or a tag (tag:NAME as written; index only; "
+                          "not with --full)")
+    flt.add_argument("--no-flag", action="append", default=[], type=flag,
+                     metavar="NAME",
+                     help="flag on no copy (repeated: none of them)")
     flt.add_argument("--body", action="append", default=[], metavar="PATTERN",
                      help="regex over the unquoted body text")
     flt.add_argument("--include-quoted", action="store_true",
@@ -182,7 +192,7 @@ def _filters(args: argparse.Namespace) -> Filters:
         from_=args.from_, to=args.to, cc=args.cc, any_address=args.any_address,
         subject=args.subject, headers=headers, since=args.since,
         until=args.until, account=args.account, mailbox=args.mailbox,
-        body=args.body[0] if args.body else None, include_quoted=args.include_quoted,
+        flag=args.flag, no_flag=args.no_flag, body=args.body[0] if args.body else None, include_quoted=args.include_quoted,
         case_sensitive=args.case_sensitive)
 
 
@@ -196,6 +206,8 @@ def _check(args: argparse.Namespace, f: Filters) -> None:
         raise _UsageError("--all-paths needs --paths-only")
     if args.full and args.no_confirm:
         raise _UsageError("--no-confirm cannot be used with --full")
+    if args.full and (f.flag or f.no_flag):
+        raise _UsageError("--flag and --no-flag need the index; not with --full")
     flags = 0 if f.case_sensitive else re.IGNORECASE
     patterns: list[tuple[str, str]] = [("--subject", p) for p in f.subject]
     patterns += [(f"--header {n}", p) for n, ps in f.headers.items() for p in ps]
@@ -223,7 +235,7 @@ def _confirmed_row(group: Group, conf) -> Row:
     paths, ids = _paths(group)
     return Row(conf.date, h.get("from", ""), h.get("to", ""), h.get("cc", ""),
                h.get("subject", ""), group.message_id, paths, ids, True,
-               conf.copy.path)
+               conf.copy.path, group.flags)
 
 
 def _in_range(copy: Copy, f: Filters) -> bool:
@@ -255,7 +267,7 @@ def _index_row(snap, group: Group, f: Filters, confirmed) -> Row:
     h = index_headers(snap, first.id)
     paths, ids = _paths(group)
     return Row(first.index_date, h["from"], h["to"], h["cc"], h["subject"],
-               group.message_id, paths, ids, confirmed, None)
+               group.message_id, paths, ids, confirmed, None, group.flags)
 
 
 class _Outcome:
@@ -267,15 +279,24 @@ class _Outcome:
         self.unstable = False
 
 
-def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool) -> _Outcome:
-    if f.headers and store.database_dir.is_dir():
+def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool,
+               show_flags: bool) -> _Outcome:
+    names = needed_indexes(f)
+    if store.database_dir.is_dir():
         known = store.index_names()
         for name in f.headers:
             if name not in known:
                 raise _UsageError(
                     f"--header {name}: MailMate has no index for this header; "
                     "use --full to scan the .eml files")
-    snap = store.snapshot(needed_indexes(f))
+        if FLAGS in known:
+            # Only when used: #flags changes whenever mail is read, so it
+            # makes a stable snapshot less likely.
+            if show_flags:
+                names.add(FLAGS)
+        elif f.flag or f.no_flag:
+            raise _UsageError("--flag and --no-flag: MailMate has no #flags index")
+    snap = store.snapshot(names)
     cands = find_candidates(snap, f)
     grouped = group_copies(snap, cands.ids, f, store.messages_dir)
     o = _Outcome()
@@ -410,7 +431,7 @@ def _main(argv: Optional[List[str]]) -> int:
     if args.full:
         o = _run_full(store, f, jobs)
     else:
-        o = _run_index(store, f, jobs, args.no_confirm)
+        o = _run_index(store, f, jobs, args.no_confirm, args.json or args.verbose)
     rows = sort_rows(o.rows)
     found = bool(rows)
     if args.limit is not None:

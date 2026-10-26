@@ -17,10 +17,10 @@ from datetime import datetime, timedelta, timezone
 
 from mmgrep.query import (AddrSpec, Copy, Filters, Group, GroupResult,
                           addr_matches, address_tokens, candidates,
-                          effective_index_date, group_copies, has_filter,
-                          index_headers, needed_indexes, parse_addr,
-                          parse_header_arg, parse_index_date, parse_since,
-                          parse_until)
+                          effective_index_date, flags_ok, group_copies,
+                          has_filter, index_headers, needed_indexes, parse_addr,
+                          parse_flag, parse_header_arg, parse_index_date,
+                          parse_since, parse_until)
 from mmgrep.store import Store
 from tests import fixtures
 from tests.fixtures import FixtureMessage, FixturePart, build_store
@@ -111,6 +111,7 @@ class AddrSpecTest(unittest.TestCase):
         self.assertFalse(has_filter(Filters(include_quoted=True, case_sensitive=True)))
         self.assertTrue(has_filter(Filters(subject=["x"])))
         self.assertTrue(has_filter(Filters(body="x")))
+        self.assertTrue(has_filter(Filters(no_flag=[frozenset({"\\seen"})])))
         self.assertTrue(has_filter(Filters(since=datetime(2024, 1, 1, tzinfo=UTC))))
 
     def test_needed_indexes(self) -> None:
@@ -125,6 +126,8 @@ class AddrSpecTest(unittest.TestCase):
                          base | {"#unquoted", "#root-body-part", "#quoted"})
         self.assertEqual(needed_indexes(Filters(headers={"x-mailer": ["a"]})),
                          base | {"x-mailer"})
+        self.assertEqual(needed_indexes(Filters(no_flag=[parse_flag("seen")])),
+                         base | {"#flags"})
 
 
 class DateParseTest(unittest.TestCase):
@@ -321,7 +324,7 @@ class CandidateTest(_StoreTest):
         self.assertEqual(result.ids, {1200})
         self.assertEqual(result.stats["unmapped_parts"], 0)
         self.assertEqual(set(result.stats), {"live", "after_location", "after_dates",
-                                             "after_headers", "after_body",
+                                             "after_flags", "after_headers", "after_body",
                                              "unmapped_parts"})
 
     def test_body_multiline(self) -> None:
@@ -452,6 +455,98 @@ class GroupTest(_StoreTest):
             self.assertEqual((c.index_date, c.date_source), effective_index_date(snap, c.id))
         self.assertEqual([c.date_source for c in copies], ["received", "received", "date"])
         self.assertEqual(copies[1].index_date, datetime(2024, 3, 10, 10, tzinfo=UTC))
+
+
+class FlagTest(_StoreTest):
+    def _flagged(self) -> None:
+        # 1200 answered; 1300 unanswered in INBOX, answered in its Archive
+        # copy 1500; 1400 forwarded and tagged; 1600 has an empty value.
+        self.build([
+            msg(1200, headers=hdr(1200), index={"#flags": "\\Answered \\Seen"}),
+            msg(1300, headers=hdr(1300), index={"#flags": "\\Seen"}),
+            msg(1500, mailbox="Archive", duplicate_of=1300,
+                index={"#flags": "\\answered \\SEEN"}),
+            msg(1400, headers=hdr(1400), index={"#flags": "$Forwarded Done"}),
+            msg(1600, headers=hdr(1600), index={"#flags": b""}),
+        ])
+
+    def test_parse_flag(self) -> None:
+        self.assertEqual(parse_flag("Answered"), frozenset({"\\answered"}))
+        self.assertEqual(parse_flag("forwarded"),
+                         frozenset({"$forwarded", "forwarded"}))
+        self.assertEqual(parse_flag("\\Seen"), frozenset({"\\seen"}))
+        self.assertEqual(parse_flag("$MailFlagBit0"), frozenset({"$mailflagbit0"}))
+        self.assertEqual(parse_flag("Done"), frozenset({"done"}))
+        self.assertEqual(parse_flag("tag:Seen"), frozenset({"seen"}))
+        self.assertEqual(parse_flag("tag:junk"), frozenset({"junk"}))
+        for bad in ("", "a b", "x\ty", "tag:"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    parse_flag(bad)
+
+    def test_flags_ok(self) -> None:
+        answered, seen = parse_flag("answered"), parse_flag("seen")
+        self.assertTrue(flags_ok({"\\answered"}, Filters(flag=[answered])))
+        self.assertTrue(flags_ok({"\\seen"}, Filters(flag=[answered, seen])))
+        self.assertFalse(flags_ok({"\\seen"}, Filters(no_flag=[answered, seen])))
+        self.assertTrue(flags_ok(set(), Filters(no_flag=[answered])))
+        self.assertFalse(flags_ok({"\\seen"}, Filters(flag=[seen], no_flag=[seen])))
+
+    def test_flag_filters(self) -> None:
+        self._flagged()
+        a, fw, done = parse_flag("answered"), parse_flag("forwarded"), parse_flag("done")
+        cases = {
+            "answered": (Filters(flag=[a]), {1200, 1300, 1500}),
+            "not answered": (Filters(no_flag=[a]), {1400, 1600}),
+            "none of two": (Filters(no_flag=[a, fw]), {1600}),
+            "tag": (Filters(flag=[done]), {1400}),
+            "union beats mailbox": (Filters(no_flag=[a], mailbox=["^INBOX$"]),
+                                    {1400, 1600}),
+        }
+        for label, (f, expected) in cases.items():
+            with self.subTest(case=label):
+                self.assertEqual(self.ids(f), expected)
+
+    def test_group_flags_union(self) -> None:
+        self._flagged()
+        f = Filters(subject=["^Message 1[34]00$"], mailbox=["^INBOX$"])
+        snap = self.snap(f, extra=("#flags",))
+        result = group_copies(snap, candidates(snap, f).ids, f, self.store.messages_dir)
+        self.assertEqual([([c.id for c in g.copies], g.flags) for g in result.groups], [
+            ([1300], ["\\answered", "\\Seen"]),
+            ([1400], ["$Forwarded", "Done"]),
+        ])
+
+    def test_flag_edge_cases(self) -> None:
+        # 1200 has no Message-ID; 1300 has no #flags record; 1400 is seen
+        # in March, its copy 1500 answered in May.
+        self.build([
+            msg(1200, headers=hdr(1200, Message_ID=None), index={"#flags": "\\Seen"}),
+            msg(1250, headers=hdr(1250, Message_ID=None),
+                index={"#flags": "\\Answered \\Seen"}),
+            msg(1300, headers=hdr(1300)),
+            msg(1400, headers=hdr(1400), index={"#flags": "\\Seen"}),
+            msg(1500, mailbox="Archive", index={"#flags": "\\Answered"},
+                headers=hdr(1400, Date="Wed, 01 May 2024 10:00:00 +0000")),
+        ])
+        a, seen = parse_flag("answered"), parse_flag("seen")
+        march = datetime(2024, 4, 1, tzinfo=UTC)
+        cases = {
+            "own flags only": (Filters(flag=[seen], no_flag=[a]), {1200}),
+            "no record": (Filters(no_flag=[a, seen]), {1300}),
+            "date-excluded copy counts": (Filters(no_flag=[a], until=march), {1200, 1300}),
+            "flag and no-flag": (Filters(flag=[a], no_flag=[parse_flag("flagged")]),
+                                 {1250, 1400, 1500}),
+            "no-flag sees the union": (Filters(flag=[a], no_flag=[seen]), set()),
+        }
+        for label, (f, expected) in cases.items():
+            with self.subTest(case=label):
+                self.assertEqual(self.ids(f), expected)
+
+    def test_group_flags_none_without_index(self) -> None:
+        self.build([msg(1200, headers=hdr(1200))])
+        f = Filters(subject=["."])
+        self.assertIsNone(self.groups(f).groups[0].flags)
 
 
 if __name__ == "__main__":

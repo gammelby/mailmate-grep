@@ -17,7 +17,7 @@ from mmgrep.output import Row, render, sort_rows
 PLUS_ONE = timezone(timedelta(hours=1))
 KEYS = {
     "date", "from", "to", "cc", "subject", "message_id", "paths", "ids",
-    "confirmed", "confirmed_path",
+    "confirmed", "confirmed_path", "flags",
 }
 
 
@@ -86,7 +86,8 @@ class OutputTests(unittest.TestCase):
             _row(date=None, confirmed=False, confirmed_path=None,
                  message_id=None, paths=["/s/2.eml", "/s/3.eml"],
                  ids=[2, 3]),
-            _row(confirmed="indeterminate", confirmed_path=None),
+            _row(confirmed="indeterminate", confirmed_path=None,
+                 flags=["\\Seen"]),
         ]
         lines = _render(rows, "json").splitlines()
         self.assertEqual(len(lines), 3)
@@ -105,6 +106,8 @@ class OutputTests(unittest.TestCase):
         self.assertIsNone(objs[1]["message_id"])
         self.assertEqual(objs[1]["ids"], [2, 3])
         self.assertEqual(objs[2]["confirmed"], "indeterminate")
+        self.assertIsNone(objs[0]["flags"])
+        self.assertEqual(objs[2]["flags"], ["\\Seen"])
 
     def test_json_ascii_and_surrogates(self) -> None:
         text = _render([_row(subject="café",

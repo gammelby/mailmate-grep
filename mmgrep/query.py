@@ -2,8 +2,9 @@
 
 Candidates follow design section 8 steps 2 and 3 with the milestone 3 plan
 decisions D6 to D8 and rulings C3 and C5: Location filters first, then
-dates, then address and header filters, then the body. Every step works on
-the current candidate set, which starts as the live set (rule R1). Header
+dates, then flags, then address and header filters, then the body. Every
+step works on the current candidate set, which starts as the live set
+(rule R1). Flags are per message, the union over its copies. Header
 values are matched in the decoded form the index stores (rule R4), body
 records one at a time (rule R5) and dates follow rule R6. Grouping
 (design section 8 step 4, ruling RP3) folds live ids that share a
@@ -32,6 +33,7 @@ DATE_RECEIVED = "#date-received"
 UNQUOTED = "#unquoted"
 QUOTED = "#quoted"
 ROOT_BODY_PART = "#root-body-part"
+FLAGS = "#flags"
 BASE_INDEXES = frozenset({SOURCE, MESSAGE_ID, DATE, DATE_RECEIVED,
                           "from", "to", "cc", "subject"})
 ADDRESS_FIELDS = {
@@ -51,6 +53,19 @@ _LOCAL = re.compile(f"[{_ATEXT}]+")
 _HOST = re.compile("[A-Za-z0-9.-]+")
 _HEADER_NAME = re.compile("[!-9;-~]+")
 _AT = b"@"
+
+# --flag names for the IMAP system flags and the keywords MailMate sets.
+# Any other name is one keyword (a MailMate tag), matched as written.
+FLAG_ALIASES = {
+    "seen": ("\\seen",),
+    "answered": ("\\answered",),
+    "flagged": ("\\flagged",),
+    "draft": ("\\draft",),
+    "deleted": ("\\deleted",),
+    "forwarded": ("$forwarded", "forwarded"),
+    "junk": ("$junk", "junk"),
+}
+_FLAG_TOKEN = re.compile("[!-~]+")
 
 # Decision D6: The stored forms of FORMAT.md section 5. Anything else goes
 # through strptime itself, so results always equal the strptime route.
@@ -81,7 +96,9 @@ class Filters:
     """The query. Repeated values of one option OR; different options AND.
 
     since is inclusive and until exclusive; both are aware datetimes.
-    headers maps a lowercased index name to its patterns.
+    headers maps a lowercased index name to its patterns. flag and no_flag
+    hold one lowercased token set per option (parse_flag): A message
+    passes when its flags meet some flag set and no no_flag set.
     """
 
     from_: list[AddrSpec] = field(default_factory=list)
@@ -94,6 +111,8 @@ class Filters:
     until: datetime | None = None
     account: list[str] = field(default_factory=list)
     mailbox: list[str] = field(default_factory=list)
+    flag: list[frozenset[str]] = field(default_factory=list)
+    no_flag: list[frozenset[str]] = field(default_factory=list)
     body: str | None = None
     include_quoted: bool = False
     case_sensitive: bool = False
@@ -121,10 +140,15 @@ class Copy:
 
 @dataclass
 class Group:
-    """The qualifying copies of one Message-ID, sorted by path."""
+    """The qualifying copies of one Message-ID, sorted by path.
+
+    flags lists the flags of every live copy, qualifying or not (None
+    without the #flags index, as with --full).
+    """
 
     message_id: str | None
     copies: list[Copy]
+    flags: list[str] | None = None
 
 
 @dataclass
@@ -175,6 +199,25 @@ def parse_header_arg(text: str) -> tuple[str, str]:
     return name, pattern
 
 
+def parse_flag(name: str) -> frozenset[str]:
+    """The lowercased flag tokens a --flag NAME stands for.
+
+    NAME is an alias of FLAG_ALIASES, a system flag such as "\\Answered"
+    or a keyword such as "$MailFlagBit0" or a tag. "tag:NAME" is NAME as
+    written, for a tag that shares an alias name. IMAP flags are
+    case-insensitive, so the tokens are too.
+    """
+    token = name.lower()
+    literal = token.startswith("tag:")
+    if literal:
+        token = token[4:]
+    if not _FLAG_TOKEN.fullmatch(token):
+        raise ValueError(f"invalid flag {name!r}: use one word such as answered or \\Seen")
+    if literal:
+        return frozenset({token})
+    return frozenset(FLAG_ALIASES.get(token, (token,)))
+
+
 def _parse_iso(text: str, option: str) -> tuple[datetime, bool]:
     """The aware instant of text and whether text was a date only."""
     m = _ISO.fullmatch(text)
@@ -210,7 +253,8 @@ def has_filter(f: Filters) -> bool:
     """True when the query restricts anything."""
     return bool(f.from_ or f.to or f.cc or f.any_address or f.subject
                 or f.headers or f.since is not None or f.until is not None
-                or f.account or f.mailbox or f.body is not None)
+                or f.account or f.mailbox or f.flag or f.no_flag
+                or f.body is not None)
 
 
 def needed_indexes(f: Filters) -> set[str]:
@@ -222,6 +266,8 @@ def needed_indexes(f: Filters) -> set[str]:
         names.update((UNQUOTED, ROOT_BODY_PART))
     if f.include_quoted:
         names.add(QUOTED)
+    if f.flag or f.no_flag:
+        names.add(FLAGS)
     names.update(f.headers)
     return names
 
@@ -319,6 +365,66 @@ def effective_index_date(snap: Snapshot, id: int) -> tuple[datetime | None, str 
         if dt is not None:
             return dt, "received"
     return None, None
+
+
+# Flags
+
+
+def mid_members(snap: Snapshot) -> dict[bytes, list[int]]:
+    """The live ids of each non-empty last Message-ID value."""
+    mid_index = snap.indexes.get(MESSAGE_ID)
+    by_mid: dict[bytes, list[int]] = {}
+    if mid_index is not None:
+        for id in snap.live:
+            value = mid_index.last(id)
+            if value:
+                by_mid.setdefault(value, []).append(id)
+    return by_mid
+
+
+def message_flags(snap: Snapshot, ids: Iterable[int]) -> dict[str, str]:
+    """The flags of ids as {lowercased token: first spelling seen}.
+
+    Flags are stored per copy, so a message's flags are the union over
+    its copies. Every current #flags record counts (rule R1).
+    """
+    index = snap.indexes.get(FLAGS)
+    out: dict[str, str] = {}
+    if index is None:
+        return out
+    for id in ids:
+        for value in index.values(id) or ():
+            for token in _decode(value).split():
+                out.setdefault(token.lower(), token)
+    return out
+
+
+def flags_ok(tokens: Iterable[str], f: Filters) -> bool:
+    """Whether lowercased tokens meet some --flag set and no --no-flag set."""
+    have = set(tokens)
+    if f.flag and not any(have & s for s in f.flag):
+        return False
+    return not any(have & s for s in f.no_flag)
+
+
+def _flag_step(snap: Snapshot, f: Filters, cands: set[int]) -> set[int]:
+    """The ids of cands whose message (every copy by Message-ID) passes."""
+    mid_index = snap.indexes.get(MESSAGE_ID)
+    by_mid = mid_members(snap)
+    seen: dict[bytes, bool] = {}
+    kept: set[int] = set()
+    for id in cands:
+        value = mid_index.last(id) if mid_index is not None else None
+        if value:
+            hit = seen.get(value)
+            if hit is None:
+                hit = flags_ok(message_flags(snap, by_mid.get(value, [id])), f)
+                seen[value] = hit
+        else:
+            hit = flags_ok(message_flags(snap, [id]), f)
+        if hit:
+            kept.add(id)
+    return kept
 
 
 # Candidates
@@ -442,6 +548,10 @@ def candidates(snap: Snapshot, f: Filters) -> CandidateSet:
         cands = kept
     stats["after_dates"] = len(cands)
 
+    if f.flag or f.no_flag:
+        cands = _flag_step(snap, f, cands)
+    stats["after_flags"] = len(cands)
+
     for attr, names in ADDRESS_FIELDS.items():
         specs = getattr(f, attr)
         if specs:
@@ -488,15 +598,12 @@ def group_copies(snap: Snapshot, ids: Iterable[int], f: Filters,
     Ids without a Message-ID (or with an empty one) stand alone. Groups
     without a qualifying copy are dropped. missing_eml counts each
     considered live id once whose #source is absent or unmapped or whose
-    .eml does not exist (ruling RP3, rule R10).
+    .eml does not exist (ruling RP3, rule R10). A group's flags are the
+    union over all its live ids, sorted by lowercased token.
     """
     mid_index = snap.indexes.get(MESSAGE_ID)
-    by_mid: dict[bytes, list[int]] = {}
-    if mid_index is not None:
-        for id in snap.live:
-            value = mid_index.last(id)
-            if value:
-                by_mid.setdefault(value, []).append(id)
+    by_mid = mid_members(snap)
+    has_flags = FLAGS in snap.indexes
     accounts, mailboxes = _location_patterns(f)
     sources = _Sources(snap)
     considered: set[int] = set()
@@ -536,7 +643,11 @@ def group_copies(snap: Snapshot, ids: Iterable[int], f: Filters,
                                dt, source))
         if copies:
             copies.sort(key=lambda c: c.path)
-            groups.append(Group(message_id, copies))
+            flags = None
+            if has_flags:
+                found = message_flags(snap, members)
+                flags = [found[k] for k in sorted(found)]
+            groups.append(Group(message_id, copies, flags))
     groups.sort(key=lambda g: g.copies[0].path)
     return GroupResult(groups, missing)
 

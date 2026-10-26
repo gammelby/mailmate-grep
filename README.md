@@ -98,6 +98,8 @@ Filters:
 | `--until DATE` | Date before DATE; a date only means before the next local midnight |
 | `--account PATTERN` | Regex over the account name |
 | `--mailbox PATTERN` | Regex over the mailbox path |
+| `--flag NAME` | A flag on any copy of the message: `seen`, `answered`, `flagged`, `draft`, `deleted`, `forwarded`, `junk`, a raw IMAP flag (`'\Seen'`, `$MailFlagBit0`) or a MailMate tag (`tag:NAME` for a tag named like an alias); case is ignored. Repeated: any of them |
+| `--no-flag NAME` | The flag on no copy of the message. Repeated: none of them |
 | `--body PATTERN` | Regex over the unquoted body text (only once per search) |
 | `--include-quoted` | Also search quoted body text |
 | `-s`, `--case-sensitive` | Match patterns case-sensitively |
@@ -125,7 +127,7 @@ Output:
 | `--help-agents` | Print an extended guide for coding agents and scripts (JSON schema, exit codes, semantics, recipes) |
 | `-h`, `--help` | Show the help and exit |
 
-`--json` and `--paths-only` exclude each other. `--all-paths` needs `--paths-only` and `--no-confirm` cannot be combined with `--full`. `--body` may be given only once; a second one is exit 2.
+`--json` and `--paths-only` exclude each other. `--all-paths` needs `--paths-only` and neither `--no-confirm` nor a flag filter can be combined with `--full`. `--body` may be given only once; a second one is exit 2.
 
 Value syntax:
 
@@ -151,8 +153,8 @@ When several apply, 130 wins over 2, 2 over 3 and 3 over 0 and 1. Exit 3 is used
 
 One row per message. Copies of one message in several mailboxes (same Message-ID) are merged into one row that lists every copy. Rows are sorted by date ascending, then by Message-ID. Rows without a date come last. `--limit` applies after sorting.
 
-- **Table** (default): Local date and time, From, Subject and the number of copies. Long values are cut with `...` and control characters are shown escaped. `-v` adds the To and Cc lines and every path.
-- **JSON lines** (`--json`): One object per line with the keys `date` (ISO 8601 with offset; null when there is no date), `from`, `to`, `cc`, `subject`, `message_id`, `paths` (list), `ids` (list of MailMate message ids), `confirmed` and `confirmed_path`. `confirmed` is `true` for a hit confirmed against an `.eml` file, `false` with `--no-confirm` and `"indeterminate"` when no copy could be decided. `confirmed_path` is the copy that confirmed (null when none did). Output is ASCII-safe.
+- **Table** (default): Local date and time, From, Subject and the number of copies. Long values are cut with `...` and control characters are shown escaped. `-v` adds the To, Cc and flags lines and every path.
+- **JSON lines** (`--json`): One object per line with the keys `date` (ISO 8601 with offset; null when there is no date), `from`, `to`, `cc`, `subject`, `message_id`, `paths` (list), `ids` (list of MailMate message ids), `confirmed`, `confirmed_path` and `flags`. `confirmed` is `true` for a hit confirmed against an `.eml` file, `false` with `--no-confirm` and `"indeterminate"` when no copy could be decided. `confirmed_path` is the copy that confirmed (null when none did). `flags` lists the flags of all copies of the message, sorted case-insensitively (null with `--full` or when the store has no `#flags` index). Output is ASCII-safe.
 - **Paths** (`--paths-only`): The first path of each message per line; `--all-paths` prints every copy. Paths are written as the bytes the file system holds.
 
 Diagnostics go to stderr, one line each: Index hits not confirmed, indeterminate confirmations, skipped malformed records, body segments without a live message, copies without an `.eml` file, snapshot retries, directories `--full` could not read and warnings. Output into a closed pipe (`| head`) ends quietly.
@@ -160,7 +162,7 @@ Diagnostics go to stderr, one line each: Index hits not confirmed, indeterminate
 ## How it works
 
 1. Read each index file the query needs whole in one read and check that the snapshot is consistent (retrying when MailMate changed a file mid-read).
-2. Evaluate the filters on the index, cheapest first: Account and mailbox, dates, addresses and headers, then the body.
+2. Evaluate the filters on the index, cheapest first: Account and mailbox, dates, flags, addresses and headers, then the body.
 3. Group the hits by Message-ID and expand each group to every copy MailMate holds.
 4. Confirm each group on its `.eml` files: The Message-ID must match and every filter is rechecked on the parsed file. The first copy that passes confirms the message. A copy that cannot be decoded makes the row indeterminate unless another copy confirms.
 
@@ -213,6 +215,7 @@ The body difference is by design: By default `mmgrep` searches only unquoted bod
 ## Known limits
 
 - Mail MailMate has not indexed is invisible to index searches. Only `--full` sees it.
+- Flags live only in the index: Confirmation cannot recheck `--flag` and `--no-flag`, so a flag changed seconds ago may not show yet. A message's flags are the union over its copies, because copies can disagree (for example an answered Inbox copy and an unanswered copy in Gmail's All Mail). `answered` is set only when the reply was sent from an IMAP client that sets the flag.
 - Addresses written with a comment or whitespace around the `@` (legal but rare, for example `alice (work) @example.com`) are not found by address filters.
 - Malformed MIME structure (a missing or unclosed boundary) makes a body confirmation indeterminate rather than a definite miss.
 - `--full` has no index to fall back on for dates: A message without a parsable `Date` header that carries a time zone fails every date filter there.

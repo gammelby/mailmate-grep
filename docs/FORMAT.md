@@ -95,6 +95,9 @@ Header index values are RFC 2047 decoded, unfolded and stripped of outer whitesp
 | `#source` | Mailbox URL | Section 6 | Section 6 |
 | `#cc` | Not the Cc header | Unknown | `[verified: 4,870 ids; only 1,203 have a cc record and 1,129 of those equal it]` |
 | `#unquoted`, `#quoted`, `#lc` twins | Body text | Section 8 | Section 8 |
+| `#flags` | IMAP flags and keywords of one copy | Space-separated tokens as the server spells them; `b""` for none | Below |
+
+`#flags` holds the IMAP flags of one copy: System flags (`\Seen`, `\Answered`, `\Flagged`, `\Draft`, `\Deleted`), `$` keywords (`$Forwarded`, `$Junk`, `$NotJunk`, `$MailFlagBit0` to `$MailFlagBit2` for flag colors) and plain keywords (MailMate tags and other clients' keywords) `[verified: Every live id has exactly one current record: 179,102 of 179,102; 7,364 of them empty]`. The spelling follows the server, so matching must ignore case (RFC 3501). Flags are stored per copy and copies of one message can differ: Of 16,753 Message-IDs with several live copies, 1,085 differ in `\Answered`, 203 in `\Seen`, 168 in `$Forwarded` and 35 in `\Flagged` `[verified: Snapshot of 2026-10-26]`. A message's flags are therefore the union over its copies (decision for `--flag`, 2026-10-26). Flags are not in the `.eml`, so confirmation cannot recheck them. `#server-flags` is a small queue of changes not yet synced to the server `[inferred: 25 live ids carry a value]`; readers ignore it.
 
 The Cc header index is `cc` (57,162 records), not `#cc` `[verified: 8 sampled messages with a Cc header have no #cc value]`. A `#derive-bcc` index exists and was not analyzed `[verified: Present]`.
 
