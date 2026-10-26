@@ -91,6 +91,7 @@ Header index values are RFC 2047 decoded, unfolded and stripped of outer whitesp
 | `subject` | Subject | Decoded; a fold loses the line break and keeps the following whitespace | `[verified: Equal to str(policy.default value).strip() for 1,000/1,000; 107/107 encoded words decoded]` |
 | `message-id` | Message-ID | As written, angle brackets kept | `[verified: 999/1,000; the exception keeps trailing text after ">" verbatim]` |
 | `date` | Date | Raw header text | `[verified: 44/44]` |
+| `in-reply-to`, `references` | Those headers | Unfolded, angle brackets kept | `[verified: The <...> Message-ID lists of index and .eml equal for 600 of 600 values in a 300-id sample; 65 of 78,087 and 26 of 85,342 live values hold no <...> id]` |
 | `#date`, `#date-sent`, `#date-received` | Dates | Section 5 | Section 5 |
 | `#source` | Mailbox URL | Section 6 | Section 6 |
 | `#cc` | Not the Cc header | Unknown | `[verified: 4,870 ids; only 1,203 have a cc record and 1,129 of those equal it]` |

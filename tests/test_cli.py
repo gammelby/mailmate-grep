@@ -548,6 +548,19 @@ class TestThreadFields(unittest.TestCase):
                     (["<1200@example.com>"], ["<1000@example.com>", "<1200@example.com>"]),
                 ])
 
+    def test_unknown_is_null(self) -> None:
+        store = tempfile.TemporaryDirectory()
+        self.addCleanup(store.cleanup)
+        build_store(pathlib.Path(store.name), [msg(1200, Subject="Plain")])
+        for extra, expected in (((), []), (("--no-confirm",), None)):
+            with self.subTest(extra=extra):
+                code, out, err = run("--root", store.name, "--subject", "^Plain$",
+                                     "--json", *extra)
+                self.assertEqual(code, 0, err)
+                obj = json.loads(out)
+                self.assertEqual((obj["in_reply_to"], obj["references"]),
+                                 (expected, expected))
+
     def test_replies_to_one_message(self) -> None:
         code, out, err = run("--root", self.root, "--header",
                              "in-reply-to=<1200@example.com>", "--json")

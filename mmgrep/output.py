@@ -28,7 +28,7 @@ class Row(NamedTuple):
     order; `confirmed_path` is the copy that confirmed, if any. `flags`
     lists the message's flags over all its copies (None when unknown, as
     with --full). `in_reply_to` and `references` are the Message-IDs of
-    those headers.
+    those headers (None when unknown).
     """
 
     date: Optional[datetime]
@@ -42,8 +42,8 @@ class Row(NamedTuple):
     confirmed: Union[bool, str]
     confirmed_path: Optional[str]
     flags: Optional[List[str]] = None
-    in_reply_to: Sequence[str] = ()
-    references: Sequence[str] = ()
+    in_reply_to: Optional[Sequence[str]] = None
+    references: Optional[Sequence[str]] = None
 
 
 def _sort_key(row: Row) -> tuple:
@@ -132,8 +132,8 @@ def _render_json(rows: list[Row], stream: TextIO) -> None:
             "confirmed": row.confirmed,
             "confirmed_path": row.confirmed_path,
             "flags": None if row.flags is None else list(row.flags),
-            "in_reply_to": list(row.in_reply_to),
-            "references": list(row.references),
+            "in_reply_to": None if row.in_reply_to is None else list(row.in_reply_to),
+            "references": None if row.references is None else list(row.references),
         }
         stream.write(json.dumps(obj, ensure_ascii=True) + "\n")
 

@@ -28,8 +28,11 @@ Message-ID). Sorted by date ascending.
   flags           MailMate flags of all copies (list, e.g. "\\\\Seen",
                   "\\\\Answered", "$Forwarded", tags); null means unknown
                   (--full, or no flag index), not "no flags"
-  in_reply_to     Message-IDs in In-Reply-To (list, usually 0 or 1)
-  references      Message-IDs in References, oldest first (list)
+  in_reply_to     every <...> Message-ID in In-Reply-To (list, usually
+                  0 or 1 items); null when unknown, as for --full rows
+                  that could not be confirmed
+  references      every <...> Message-ID in References, oldest first
+                  (list); null when unknown
 
 Other formats: --paths-only prints the first path per message
 (--all-paths: every copy), one per line. Paths contain spaces

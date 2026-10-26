@@ -436,6 +436,9 @@ class GroupTest(_StoreTest):
                          ["<a@example.com>", "<b@example.org>"])
         self.assertEqual(message_ids("Re: note <c@example.net> (sent)"), ["<c@example.net>"])
         self.assertEqual(message_ids(""), [])
+        self.assertEqual(message_ids("<>"), [])
+        self.assertEqual(message_ids("<a@example.com>\n\t<b@example.org>, <c@example.net>"),
+                         ["<a@example.com>", "<b@example.org>", "<c@example.net>"])
 
     def test_unmapped_source_counts(self) -> None:
         self.build([msg(1200, headers=hdr(1200, Subject="Pop"),

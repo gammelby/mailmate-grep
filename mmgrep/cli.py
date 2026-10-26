@@ -207,7 +207,8 @@ def _filters(args: argparse.Namespace) -> Filters:
         subject=args.subject, headers=headers,
         not_headers=not_headers, since=args.since,
         until=args.until, account=args.account, mailbox=args.mailbox,
-        flag=args.flag, no_flag=args.no_flag, body=args.body[0] if args.body else None, include_quoted=args.include_quoted,
+        flag=args.flag, no_flag=args.no_flag,
+        body=args.body[0] if args.body else None, include_quoted=args.include_quoted,
         case_sensitive=args.case_sensitive)
 
 
@@ -285,7 +286,8 @@ def _index_row(snap, group: Group, f: Filters, confirmed) -> Row:
     paths, ids = _paths(group)
     return Row(first.index_date, h["from"], h["to"], h["cc"], h["subject"],
                group.message_id, paths, ids, confirmed, None, group.flags,
-               message_ids(h["in-reply-to"]), message_ids(h["references"]))
+               *(message_ids(h[n]) if n in snap.indexes else None
+                 for n in THREAD_INDEXES))
 
 
 class _Outcome:
@@ -298,7 +300,7 @@ class _Outcome:
 
 
 def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool,
-               rich: bool) -> _Outcome:
+               rich: bool, json_rows: bool) -> _Outcome:
     names = needed_indexes(f)
     if store.database_dir.is_dir():
         known = store.index_names()
@@ -315,7 +317,7 @@ def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool,
                 names.add(FLAGS)
         elif f.flag or f.no_flag:
             raise _UsageError("--flag and --no-flag: MailMate has no #flags index")
-        if rich:
+        if json_rows:
             names.update(n for n in THREAD_INDEXES if n in known)
     snap = store.snapshot(names)
     cands = find_candidates(snap, f)
@@ -487,7 +489,8 @@ def _main(argv: Optional[List[str]]) -> int:
     if args.full:
         o = _run_full(store, f, jobs)
     else:
-        o = _run_index(store, f, jobs, args.no_confirm, args.json or args.verbose)
+        o = _run_index(store, f, jobs, args.no_confirm,
+                           args.json or args.verbose, args.json)
     rows = sort_rows(o.rows)
     found = bool(rows)
     if args.limit is not None:
