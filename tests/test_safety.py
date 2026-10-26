@@ -98,6 +98,11 @@ MODULE_STEMS = frozenset({"__init__", "__main__", "cli", "confirm", "index",
                           "output", "query", "scan", "source", "store",
                           "mailmate_ui", "who", "agent_help"})
 UI_MODULE = "mailmate_ui.py"
+# The only lines of mailmate_ui.py the scan may flag, matched exactly.
+UI_ALLOWED_LINES = frozenset({
+    "import subprocess",
+    "def open_url(url: str, run: Callable = subprocess.run) -> int:",
+})
 
 
 def _strip(text: str) -> list[str]:
@@ -404,7 +409,7 @@ class StaticScanTest(unittest.TestCase):
                 # name subprocess may be flagged there.
                 lines = text.splitlines()
                 found = [x for x in found
-                         if "subprocess" not in lines[int(x.rsplit(":", 1)[1]) - 1]]
+                         if lines[int(x.rsplit(":", 1)[1]) - 1] not in UI_ALLOWED_LINES]
             findings += found
         self.assertEqual(findings, [])
 

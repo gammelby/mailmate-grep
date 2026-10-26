@@ -349,18 +349,24 @@ def _reconfigure_stdout() -> None:
 
 def _open_in_mailmate(rows: List[Row]) -> None:
     """--open: One line on stderr says what MailMate was asked to show."""
-    url, used, skipped = search_url(r.message_id for r in rows)
-    if url is None:
+    plan = search_url(r.message_id for r in rows)
+    if plan.url is None:
         _err("--open: no result has a usable Message-ID")
         return
-    code = open_url(url)
-    note = f"; {skipped} without a usable Message-ID" if skipped else ""
-    more = len(rows) - used - skipped
-    extra = f"; only the first {used} of {len(rows)}" if more > 0 else ""
-    if code == 0:
-        _err(f"opened {used} messages as a MailMate search{extra}{note}")
-    else:
+    try:
+        code = open_url(plan.url)
+    except OSError as e:
+        _err(f"--open: could not run /usr/bin/open: {e}")
+        return
+    if code != 0:
         _err(f"--open: /usr/bin/open exited {code}")
+        return
+    notes = [f"{n} {what}" for n, what in (
+        (plan.capped, "left out (limit reached)"),
+        (plan.skipped, "without a usable Message-ID"),
+        (plan.duplicates, "duplicate Message-IDs")) if n]
+    tail = f" ({'; '.join(notes)})" if notes else ""
+    _err(f"asked MailMate to search for {plan.used} Message-IDs{tail}")
 
 
 def _run_who(args: argparse.Namespace, f: Filters) -> int:
