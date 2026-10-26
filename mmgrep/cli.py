@@ -20,7 +20,8 @@ from mmgrep.confirm import CONFIRMED, INDETERMINATE, REJECTED, confirm_all
 from mmgrep.output import Row, render, sort_rows
 from mmgrep.query import (FLAGS, Copy, Filters, Group, group_copies, has_filter,
                           index_headers, needed_indexes, parse_addr, parse_flag,
-                          parse_header_arg, parse_since, parse_until)
+                          parse_header_arg, parse_not_header_arg, parse_since,
+                          parse_until)
 from mmgrep.query import candidates as find_candidates
 from mmgrep.scan import full_scan
 from mmgrep.store import DEFAULT_ROOT, FormatError, Store
@@ -130,6 +131,11 @@ def build_parser() -> argparse.ArgumentParser:
                      type=_type(parse_header_arg, "NAME=PATTERN"),
                      metavar="NAME=PATTERN",
                      help="regex over an indexed header (any header with --full)")
+    flt.add_argument("--not-header", action="append", default=[],
+                     type=_type(parse_not_header_arg, "NAME[=PATTERN]"),
+                     metavar="NAME[=PATTERN]",
+                     help="exclude messages with that header (or a value matching "
+                          "PATTERN); repeated: none of them")
     flt.add_argument("--since", type=_type(parse_since, "DATE"), metavar="DATE",
                      help="date on or after DATE")
     flt.add_argument("--until", type=_type(parse_until, "DATE"), metavar="DATE",
@@ -188,9 +194,13 @@ def _filters(args: argparse.Namespace) -> Filters:
     headers: dict[str, list[str]] = {}
     for name, pattern in args.header:
         headers.setdefault(name, []).append(pattern)
+    not_headers: dict[str, list[str]] = {}
+    for name, pattern in args.not_header:
+        not_headers.setdefault(name, []).append(pattern)
     return Filters(
         from_=args.from_, to=args.to, cc=args.cc, any_address=args.any_address,
-        subject=args.subject, headers=headers, since=args.since,
+        subject=args.subject, headers=headers,
+        not_headers=not_headers, since=args.since,
         until=args.until, account=args.account, mailbox=args.mailbox,
         flag=args.flag, no_flag=args.no_flag, body=args.body[0] if args.body else None, include_quoted=args.include_quoted,
         case_sensitive=args.case_sensitive)
@@ -211,6 +221,7 @@ def _check(args: argparse.Namespace, f: Filters) -> None:
     flags = 0 if f.case_sensitive else re.IGNORECASE
     patterns: list[tuple[str, str]] = [("--subject", p) for p in f.subject]
     patterns += [(f"--header {n}", p) for n, ps in f.headers.items() for p in ps]
+    patterns += [(f"--not-header {n}", p) for n, ps in f.not_headers.items() for p in ps]
     patterns += [("--account", p) for p in f.account]
     patterns += [("--mailbox", p) for p in f.mailbox]
     if f.body is not None:
@@ -284,10 +295,11 @@ def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool,
     names = needed_indexes(f)
     if store.database_dir.is_dir():
         known = store.index_names()
-        for name in f.headers:
+        for option, name in ([("--header", n) for n in f.headers]
+                             + [("--not-header", n) for n in f.not_headers]):
             if name not in known:
                 raise _UsageError(
-                    f"--header {name}: MailMate has no index for this header; "
+                    f"{option} {name}: MailMate has no index for this header; "
                     "use --full to scan the .eml files")
         if FLAGS in known:
             # Only when used: #flags changes whenever mail is read, so it

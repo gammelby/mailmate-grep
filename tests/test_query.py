@@ -20,6 +20,7 @@ from mmgrep.query import (AddrSpec, Copy, Filters, Group, GroupResult,
                           effective_index_date, flags_ok, group_copies,
                           has_filter, index_headers, needed_indexes, parse_addr,
                           parse_flag, parse_header_arg, parse_index_date,
+                          parse_not_header_arg,
                           parse_since, parse_until)
 from mmgrep.store import Store
 from tests import fixtures
@@ -455,6 +456,38 @@ class GroupTest(_StoreTest):
             self.assertEqual((c.index_date, c.date_source), effective_index_date(snap, c.id))
         self.assertEqual([c.date_source for c in copies], ["received", "received", "date"])
         self.assertEqual(copies[1].index_date, datetime(2024, 3, 10, 10, tzinfo=UTC))
+
+
+class NotHeaderTest(_StoreTest):
+    def test_parse_not_header_arg(self) -> None:
+        self.assertEqual(parse_not_header_arg("List-Id"), ("list-id", ""))
+        self.assertEqual(parse_not_header_arg("Precedence=bulk|list"),
+                         ("precedence", "bulk|list"))
+        for bad in ("", "#flags", "x y"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    parse_not_header_arg(bad)
+
+    def test_not_header_excludes(self) -> None:
+        self.build([
+            msg(1200, headers=hdr(1200, List_Id="<news.example.com>")),
+            msg(1300, headers=hdr(1300, Precedence="bulk")),
+            msg(1400, headers=hdr(1400, Precedence="first-class")),
+            msg(1500, headers=hdr(1500)),
+        ])
+        cases = {
+            "any value": (Filters(not_headers={"list-id": [""]}), {1300, 1400, 1500}),
+            "pattern": (Filters(not_headers={"precedence": ["^(bulk|list)$"]}),
+                        {1200, 1400, 1500}),
+            "none of": (Filters(not_headers={"list-id": [""], "precedence": [""]}),
+                        {1500}),
+            "with a positive filter": (Filters(subject=["Message 1[45]00"],
+                                               not_headers={"precedence": ["bulk"]}),
+                                       {1400, 1500}),
+        }
+        for label, (f, expected) in cases.items():
+            with self.subTest(case=label):
+                self.assertEqual(self.ids(f), expected)
 
 
 class FlagTest(_StoreTest):

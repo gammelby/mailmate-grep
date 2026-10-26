@@ -94,6 +94,7 @@ Filters:
 | `--any-address ADDR` | Address in From, To, Cc or Bcc (Bcc where indexed, which is mostly sent mail) |
 | `--subject PATTERN` | Regex over the decoded subject |
 | `--header NAME=PATTERN` | Regex over an indexed header; any header with `--full`. A name MailMate has no index for is exit 2 with a hint to use `--full` |
+| `--not-header NAME[=PATTERN]` | Exclude messages that have that header (or a value matching PATTERN). Repeated: none of them. Same index rule as `--header`; for example `--not-header list-id --not-header list-unsubscribe` drops mailing lists and most newsletters |
 | `--since DATE` | Date on or after DATE |
 | `--until DATE` | Date before DATE; a date only means before the next local midnight |
 | `--account PATTERN` | Regex over the account name |

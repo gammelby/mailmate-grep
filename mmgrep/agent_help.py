@@ -82,6 +82,8 @@ QUERY SEMANTICS
     alice@example.com   exact address, case-insensitive
     re:PATTERN          regex over the whole header value
   --any-address covers From, To, Cc and Bcc. Other headers: --header.
+  --not-header NAME[=PATTERN] drops messages with that header (any value,
+  or one matching PATTERN); repeated, it drops messages with any of them.
 
   PATTERN (--subject, --header NAME=PATTERN, --body, --account,
   --mailbox): Python regex, case-insensitive (use -s for case-sensitive),
@@ -128,9 +130,12 @@ RECIPES
     mmgrep --subject 'quarterly report' --json
   A body phrase from one sender, quoted replies included:
     mmgrep --from bob@example.org --body 'contract renewal' --include-quoted --json
-  Inbox mail that may still need a reply (not answered or forwarded):
+  Inbox mail that may still need a reply (not answered or forwarded, no
+  mailing lists, newsletters or bulk mail):
     mmgrep --mailbox '^INBOX$' --since 2026-10-01 --no-flag answered \\
-      --no-flag forwarded --json
+      --no-flag forwarded --not-header list-id \\
+      --not-header list-unsubscribe --not-header 'precedence=bulk|list|junk' \\
+      --json
     then drop rows whose sender is a robot (noreply@ and the like).
   Sent mail: --mailbox 'Sent' (mailbox names differ per account; check the
   mailbox part of "paths"). Replies to one message:

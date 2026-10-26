@@ -458,6 +458,9 @@ def _check_message(msg: Message, f: Filters, message_id: str | None,
     for name, patterns in f.headers.items():
         if patterns:
             checks.append(_check_patterns(h, name, [re.compile(p, flags) for p in patterns]))
+    for name, patterns in f.not_headers.items():
+        hit = _check_patterns(h, name, [re.compile(p, flags) for p in patterns])
+        checks.append(None if hit is None else not hit)
 
     if f.body is not None and False not in checks:
         checks.append(_check_body(msg, f, strip_quoted))

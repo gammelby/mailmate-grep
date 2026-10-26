@@ -96,7 +96,9 @@ class Filters:
     """The query. Repeated values of one option OR; different options AND.
 
     since is inclusive and until exclusive; both are aware datetimes.
-    headers maps a lowercased index name to its patterns. flag and no_flag
+    headers maps a lowercased index name to its patterns; not_headers does
+    too, but a value matching any of them excludes the message (the
+    pattern "" matches any value). flag and no_flag
     hold one lowercased token set per option (parse_flag): A message
     passes when its flags meet some flag set and no no_flag set.
     """
@@ -111,6 +113,7 @@ class Filters:
     until: datetime | None = None
     account: list[str] = field(default_factory=list)
     mailbox: list[str] = field(default_factory=list)
+    not_headers: dict[str, list[str]] = field(default_factory=dict)
     flag: list[frozenset[str]] = field(default_factory=list)
     no_flag: list[frozenset[str]] = field(default_factory=list)
     body: str | None = None
@@ -199,6 +202,11 @@ def parse_header_arg(text: str) -> tuple[str, str]:
     return name, pattern
 
 
+def parse_not_header_arg(text: str) -> tuple[str, str]:
+    """Split "NAME[=PATTERN]"; NAME alone gives the pattern "" (any value)."""
+    return parse_header_arg(text if "=" in text else text + "=")
+
+
 def parse_flag(name: str) -> frozenset[str]:
     """The lowercased flag tokens a --flag NAME stands for.
 
@@ -252,7 +260,7 @@ def parse_until(text: str) -> datetime:
 def has_filter(f: Filters) -> bool:
     """True when the query restricts anything."""
     return bool(f.from_ or f.to or f.cc or f.any_address or f.subject
-                or f.headers or f.since is not None or f.until is not None
+                or f.headers or f.not_headers or f.since is not None or f.until is not None
                 or f.account or f.mailbox or f.flag or f.no_flag
                 or f.body is not None)
 
@@ -269,6 +277,7 @@ def needed_indexes(f: Filters) -> set[str]:
     if f.flag or f.no_flag:
         names.add(FLAGS)
     names.update(f.headers)
+    names.update(f.not_headers)
     return names
 
 
@@ -561,6 +570,8 @@ def candidates(snap: Snapshot, f: Filters) -> CandidateSet:
     for name, patterns in f.headers.items():
         if patterns:
             cands = _pattern_step(snap, name, patterns, flags, cands)
+    for name, patterns in f.not_headers.items():
+        cands = cands - _pattern_step(snap, name, patterns, flags, cands)
     stats["after_headers"] = len(cands)
 
     unmapped = 0

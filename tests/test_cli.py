@@ -467,6 +467,46 @@ class TestFlags(unittest.TestCase):
         self.assertEqual(["#flags" in n for n in seen], [False, True])
 
 
+class TestNotHeader(unittest.TestCase):
+    """--not-header on the index, in confirmation and with --full."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._tmp = tempfile.TemporaryDirectory()
+        cls.root = str(pathlib.Path(cls._tmp.name) / "store")
+        news = msg(1200, Subject="News", List_Id="<news.example.com>")
+        # The index has lost List-Id; only the .eml still carries it.
+        stale = msg(1300, Subject="News", List_Id="<news.example.com>")
+        stale.index = {"list-id": None}
+        personal = msg(1400, Subject="News")
+        build_store(pathlib.Path(cls.root), [news, stale, personal])
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._tmp.cleanup()
+
+    def ids(self, *argv: str) -> tuple[list[list[int]], str]:
+        code, out, err = run("--root", self.root, "--subject", "^News$", "--json", *argv)
+        self.assertIn(code, (0, 1), err)
+        return [json.loads(line)["ids"] for line in out.splitlines()], err
+
+    def test_index_and_confirmation(self) -> None:
+        rows, err = self.ids("--not-header", "list-id")
+        self.assertEqual(rows, [[1400]])
+        self.assertIn("mmgrep: 1 index hits not confirmed", err.splitlines())
+
+    def test_pattern_and_full(self) -> None:
+        self.assertEqual(self.ids("--not-header", "list-id=news")[0], [[1400]])
+        self.assertEqual(self.ids("--not-header", "list-id=other")[0],
+                         [[1200], [1300], [1400]])
+        self.assertEqual(self.ids("--full", "--not-header", "list-id")[0], [[1400]])
+
+    def test_unknown_index(self) -> None:
+        code, out, err = run("--root", self.root, "--not-header", "x-absent")
+        self.assertEqual(code, 2)
+        self.assertIn("--not-header x-absent", err)
+
+
 class AgentHelpTest(unittest.TestCase):
     def test_help_agents_prints_guide_and_exits_zero(self) -> None:
         out = io.StringIO()
