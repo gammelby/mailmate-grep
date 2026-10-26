@@ -105,6 +105,8 @@ QUERY SEMANTICS
 
   --account and --mailbox are regexes over the account name (with %40
   shown as @) and the mailbox path such as "INBOX" or "Archive/2024".
+  --list-mailboxes prints every account and mailbox with its message
+  count (with --json, --account, --limit and --root only).
 
 FLAGS AND TAGS (--flag, --no-flag)
   --flag NAME keeps a message when any copy has the flag; --no-flag NAME
@@ -142,8 +144,13 @@ RECIPES
       --not-header 'precedence=^(bulk|list|junk)$' \\
       --json
     then drop rows whose sender is a robot (noreply@ and the like).
-  Sent mail: --mailbox 'Sent' (mailbox names differ per account; check the
-  mailbox part of "paths"). Replies to one message:
+  Mailbox names differ per account; list them first, then target one
+  (sent mail, for example):
+    mmgrep --list-mailboxes --json
+    {"account": "user@example.com@imap.example.com", "mailbox": "Sent Messages",
+     "messages": 4210}
+    mmgrep --mailbox '^Sent Messages$' --since 2026-10-01 --json
+  Replies to one message:
     mmgrep --header 'in-reply-to=<abc@example.com>' --json
   Was a message answered without the flag being set (reply sent from
   another client)? Search sent mail in the same period and check whether

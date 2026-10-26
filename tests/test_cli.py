@@ -555,6 +555,32 @@ class TestThreadFields(unittest.TestCase):
         self.assertEqual([json.loads(line)["ids"] for line in out.splitlines()], [[1300]])
 
 
+class TestListMailboxes(_StoreCase):
+    def test_table_and_json(self) -> None:
+        code, out, err = run("--root", self.root, "--list-mailboxes")
+        self.assertEqual(code, 0, err)
+        account = "user@example.com@imap.example.com"
+        self.assertEqual(out.splitlines(), [
+            f"      1  {account}  AAA",
+            f"      3  {account}  INBOX",
+            f"      1  {account}  ZZZ",
+        ])
+        code, out, err = run("--root", self.root, "--list-mailboxes", "--json",
+                             "--limit", "1")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(json.loads(out), {"account": account, "mailbox": "AAA",
+                                           "messages": 1})
+
+    def test_account_filter_and_errors(self) -> None:
+        code, out, _ = run("--root", self.root, "--list-mailboxes", "--account", "^nobody@")
+        self.assertEqual((code, out), (1, ""))
+        for argv in (["--subject", "x"], ["--account", "("], ["--who", "a"], ["-v"]):
+            with self.subTest(argv=argv):
+                code, out, err = run("--root", self.root, "--list-mailboxes", *argv)
+                self.assertEqual(code, 2, err)
+                self.assertEqual(out, "")
+
+
 class AgentHelpTest(unittest.TestCase):
     def test_help_agents_prints_guide_and_exits_zero(self) -> None:
         out = io.StringIO()

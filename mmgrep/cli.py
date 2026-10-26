@@ -18,9 +18,10 @@ from typing import List, Optional
 
 from mmgrep.confirm import CONFIRMED, INDETERMINATE, REJECTED, confirm_all
 from mmgrep.output import Row, render, sort_rows
-from mmgrep.query import (FLAGS, THREAD_INDEXES, Copy, Filters, Group,
+from mmgrep.query import (FLAGS, SOURCE, THREAD_INDEXES, Copy, Filters, Group,
                           group_copies, has_filter, index_headers,
-                          message_ids, needed_indexes, parse_addr, parse_flag,
+                          mailbox_counts, message_ids, needed_indexes,
+                          parse_addr, parse_flag,
                           parse_header_arg, parse_not_header_arg, parse_since,
                           parse_until)
 from mmgrep.query import candidates as find_candidates
@@ -112,6 +113,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "must start a word of the display name or address (case "
                         "and accents ignored); ranked by message count; works "
                         "with --json, --limit and --root only")
+    p.add_argument("--list-mailboxes", action="store_true",
+                   help="list every mailbox with its account and message count; "
+                        "works with --account, --json, --limit and --root only")
     p.add_argument("--help-agents", action=_AgentHelp,
                    help="extended guide for coding agents and scripts (JSON "
                         "schema, exit codes, semantics, recipes) and exit")
@@ -434,6 +438,37 @@ def _run_who(args: argparse.Namespace, f: Filters) -> int:
     return EXIT_FOUND if contacts else EXIT_NONE
 
 
+def _run_mailboxes(args: argparse.Namespace, f: Filters) -> int:
+    """mmgrep --list-mailboxes: Account, mailbox and live message count."""
+    only_account = Filters(account=f.account, case_sensitive=f.case_sensitive)
+    if (f != only_account or args.full or args.no_confirm or args.paths_only
+            or args.all_paths or args.verbose or args.jobs is not None or args.open):
+        raise _UsageError("--list-mailboxes works only with --account, --json, "
+                          "--limit and --root")
+    flags = 0 if f.case_sensitive else re.IGNORECASE
+    for pattern in f.account:
+        try:
+            re.compile(pattern, flags)
+        except re.error as e:
+            raise _UsageError(f"--account: invalid pattern {pattern!r}: {e}") from None
+    snap =Store(Path(args.root)).snapshot({SOURCE})
+    rows = mailbox_counts(snap, f)
+    shown = rows[:args.limit] if args.limit is not None else rows
+    _reconfigure_stdout()
+    for account, mailbox, count in shown:
+        if args.json:
+            print(json.dumps({"account": account, "mailbox": mailbox,
+                              "messages": count}, ensure_ascii=False))
+        else:
+            print(f"{count:7d}  {account}  {mailbox}")
+    sys.stdout.flush()
+    for w in snap.warnings:
+        _err(f"warning: {w}")
+    if snap.unstable:
+        return EXIT_UNSTABLE
+    return EXIT_FOUND if rows else EXIT_NONE
+
+
 def _main(argv: Optional[List[str]]) -> int:
     try:
         args = build_parser().parse_args(argv)
@@ -441,7 +476,11 @@ def _main(argv: Optional[List[str]]) -> int:
         return e.code if isinstance(e.code, int) else EXIT_FOUND
     f = _filters(args)
     if args.who is not None:
+        if args.list_mailboxes:
+            raise _UsageError("--who and --list-mailboxes exclude each other")
         return _run_who(args, f)
+    if args.list_mailboxes:
+        return _run_mailboxes(args, f)
     _check(args, f)
     jobs = min(MAX_JOBS, args.jobs) if args.jobs is not None else _default_jobs()
     store = Store(Path(args.root))

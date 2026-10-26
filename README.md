@@ -125,6 +125,7 @@ Output:
 | `--limit N` | Print at most N messages (after sorting by date) |
 | `-v`, `--verbose` | Table: Add to, cc and every path |
 | `--who NAME` | List the addresses a person uses, most used first: Every word of NAME must start a word of the display name or address (case and accents ignored). Combines only with `--json`, `--limit` and `--root` |
+| `--list-mailboxes` | List every mailbox as message count, account and mailbox path, sorted by account and path (`--json`: objects with `account`, `mailbox` and `messages`). Combines only with `--account`, `--json`, `--limit` and `--root` |
 | `--help-agents` | Print an extended guide for coding agents and scripts (JSON schema, exit codes, semantics, recipes) |
 | `-h`, `--help` | Show the help and exit |
 

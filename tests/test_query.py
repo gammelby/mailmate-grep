@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from mmgrep.query import (AddrSpec, Copy, Filters, Group, GroupResult,
                           addr_matches, address_tokens, candidates,
                           effective_index_date, flags_ok, group_copies,
-                          has_filter, index_headers, message_ids,
+                          has_filter, index_headers, mailbox_counts, message_ids,
                           needed_indexes, parse_addr,
                           parse_flag, parse_header_arg, parse_index_date,
                           parse_not_header_arg,
@@ -464,6 +464,27 @@ class GroupTest(_StoreTest):
             self.assertEqual((c.index_date, c.date_source), effective_index_date(snap, c.id))
         self.assertEqual([c.date_source for c in copies], ["received", "received", "date"])
         self.assertEqual(copies[1].index_date, datetime(2024, 3, 10, 10, tzinfo=UTC))
+
+
+class MailboxCountTest(_StoreTest):
+    def test_mailbox_counts(self) -> None:
+        self.build([
+            msg(1200, headers=hdr(1200)),
+            msg(1300, headers=hdr(1300)),
+            msg(1400, mailbox="Sent Messages", headers=hdr(1400)),
+            msg(1500, account=OTHER, mailbox="Archive/2024", headers=hdr(1500)),
+            msg(1600, headers=hdr(1600), deleted=True),
+            msg(1700, headers=hdr(1700), index={"#source": "pop://x/INBOX"}),
+        ])
+        snap = self.snap(Filters())
+        user = "user@example.com@imap.example.com"
+        self.assertEqual(mailbox_counts(snap, Filters()), [
+            ("bob@mail.example.org", "Archive/2024", 1),
+            (user, "INBOX", 2),
+            (user, "Sent Messages", 1),
+        ])
+        self.assertEqual(mailbox_counts(snap, Filters(account=["^bob@"])),
+                         [("bob@mail.example.org", "Archive/2024", 1)])
 
 
 class NotHeaderTest(_StoreTest):
