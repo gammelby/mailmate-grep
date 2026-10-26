@@ -19,6 +19,7 @@ If `mmgrep` is not on PATH, tell the user and stop; do not install anything. Nev
   ```
 
   Take the top address, or several when the person clearly uses more than one, and search with repeated `--from` (or `--any-address`) options.
+- **Dates are local; a date-only `--until` includes that whole day.** "Last week" is `--since <Monday> --until <Sunday>`.
 - **Addresses are `@domain`, `local@domain` or `re:PATTERN`.** A bare `example.com` is an error.
 - **Different options AND; repeating one option ORs.** For OR across options, run twice and union by `message_id`.
 - **Exit code 1 means nothing found**, not an error. Exit 2 is a usage error (message on stderr); exit 3 means the index changed during the read: Retry once.
@@ -39,12 +40,15 @@ Read a message with the Read tool on one of its `paths`.
 First find the user's own addresses (`mmgrep --who '<their name>' --json --limit 5`; skip robots such as notification senders). Then one query does the filtering:
 
 ```
-mmgrep --mailbox '^INBOX$' --since 2026-10-19 --no-flag answered \
-  --no-flag forwarded --not-header list-id --not-header list-unsubscribe \
-  --no-reply-from me@example.com --no-reply-from me@example.net --json --show-body
+mmgrep --mailbox '^INBOX$' --since 2026-10-19 --until 2026-10-25 \
+  --no-flag answered --no-flag forwarded \
+  --not-header list-id --not-header list-unsubscribe \
+  --not-header 'from=no-?reply|do-?not-?reply|notifications?@' \
+  --no-reply-from me@example.com --no-reply-from me@example.net \
+  --json --show-body --body-chars 800
 ```
 
-This drops mail the user answered or forwarded, mail the user replied to anywhere further down the thread, and mailing lists and newsletters. `--show-body` adds each message's text (quoted replies removed), so you can judge the rest without opening files: Robots, receipts and FYIs need no reply; a direct question or request does. Do not write scripts to match sent mail; `--no-reply-from` already did that.
+This drops mail the user answered or forwarded, mail the user replied to anywhere further down the thread, mailing lists, newsletters and robot senders. `--show-body --body-chars 800` adds the start of each message's text (quoted replies removed), which is enough to judge most mails without opening files; rerun a single message without `--body-chars` when you need all of it: Robots, receipts and FYIs need no reply; a direct question or request does. Do not write scripts to match sent mail; `--no-reply-from` already did that.
 
 ## Showing mails in MailMate
 

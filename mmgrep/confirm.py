@@ -426,13 +426,14 @@ def _part_text(part: Message) -> str:
         return payload.decode("utf-8", "replace")
 
 
-def display_body(path: str, strip_quoted: bool) -> tuple[str | None, bool]:
+def display_body(path: str, strip_quoted: bool,
+                 cap: int = BODY_CAP) -> tuple[str | None, bool]:
     """The main body of one `.eml` as text to show, and whether it was cut.
 
     The main body is chosen by _main_part. HTML becomes text with block
     boundaries as line breaks. With strip_quoted, quoted text is dropped
     as for --body (decision D4). Runs of blank lines shrink to one and the
-    text is cut at BODY_CAP characters. None when the file cannot be read
+    text is cut at cap characters. None when the file cannot be read
     or has no text body.
     """
     try:
@@ -448,8 +449,8 @@ def display_body(path: str, strip_quoted: bool) -> tuple[str | None, bool]:
         # OSError or a broken MIME tree, for example.
         return None, False
     text = _BLANK_RUN.sub("\n\n", text).strip()
-    if len(text) > BODY_CAP:
-        return text[:BODY_CAP], True
+    if len(text) > cap:
+        return text[:cap], True
     return text, False
 
 

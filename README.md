@@ -124,6 +124,7 @@ Output:
 | `--paths-only` | The first `.eml` path of each message |
 | `--all-paths` | With `--paths-only`: Every copy's path |
 | `--show-body` | With `--json`: Add the main body text as `body` and `body_truncated` (see below) |
+| `--body-chars N` | With `--show-body`: Cut each body at N characters instead of 20,000 |
 | `--limit N` | Print at most N messages (after sorting by date) |
 | `-v`, `--verbose` | Table: Add to, cc and every path |
 | `--who NAME` | List the addresses a person uses, most used first: Every word of NAME must start a word of the display name or address (case and accents ignored). Combines only with `--json`, `--limit` and `--root` |

@@ -716,6 +716,18 @@ class TestShowBody(unittest.TestCase):
         self.assertEqual((len(rows["Long"]["body"]), rows["Long"]["body_truncated"]),
                          (20000, True))
 
+    def test_body_chars(self) -> None:
+        rows = self.rows("--subject", "^(Plain|Long)$", "--body-chars", "5")
+        self.assertEqual({s: (r["body"], r["body_truncated"]) for s, r in rows.items()},
+                         {"Plain": ("First", True), "Long": (rows["Long"]["body"], True)})
+        self.assertEqual(len(rows["Long"]["body"]), 5)
+        rows = self.rows("--subject", "^Plain$", "--body-chars", "100")
+        self.assertEqual(rows["Plain"]["body_truncated"], False)
+        code, out, err = run("--root", self.root, "--json", "--subject", "^Plain$",
+                             "--body-chars", "5")
+        self.assertEqual((code, out), (2, ""), err)
+        self.assertIn("--body-chars needs --show-body", err)
+
     def test_include_quoted(self) -> None:
         rows = self.rows("--subject", "^(Plain|Html)$", "--include-quoted")
         self.assertEqual(rows["Plain"]["body"], "First line\n\nSecond line\n\n> Earlier text")

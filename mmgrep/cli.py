@@ -16,8 +16,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from mmgrep.confirm import (CONFIRMED, INDETERMINATE, REJECTED, confirm_all,
-                            display_body)
+from mmgrep.confirm import (BODY_CAP, CONFIRMED, INDETERMINATE, REJECTED,
+                            confirm_all, display_body)
 from mmgrep.output import Row, render, sort_rows
 from mmgrep.query import (FLAGS, SOURCE, THREAD_INDEXES, Copy, Filters, Group,
                           group_copies, has_filter, index_headers,
@@ -198,6 +198,9 @@ def build_parser() -> argparse.ArgumentParser:
                      help="with --json: add the main body text (quoted text "
                           "removed unless --include-quoted) as body and "
                           "body_truncated")
+    out.add_argument("--body-chars", type=_type(_count, "N"), metavar="N",
+                     help=f"with --show-body: cut each body at N characters "
+                          f"(default {BODY_CAP})")
     out.add_argument("--limit", type=_type(_count, "N"), metavar="N",
                      help="print at most N messages (after sorting by date)")
     out.add_argument("-v", "--verbose", action="store_true",
@@ -302,9 +305,9 @@ def _index_row(snap, group: Group, f: Filters, confirmed) -> Row:
                  for n in THREAD_INDEXES))
 
 
-def _with_body(row: Row, strip_quoted: bool) -> Row:
+def _with_body(row: Row, strip_quoted: bool, cap: int) -> Row:
     """Row with the body of its confirmed copy, else of its first copy."""
-    body, truncated = display_body(row.confirmed_path or row.paths[0], strip_quoted)
+    body, truncated = display_body(row.confirmed_path or row.paths[0], strip_quoted, cap)
     return row._replace(body=body, body_truncated=truncated)
 
 
@@ -507,6 +510,8 @@ def _main(argv: Optional[List[str]]) -> int:
     f = _filters(args)
     if args.show_body and (not args.json or args.who is not None or args.list_mailboxes):
         raise _UsageError("--show-body needs --json and a message search")
+    if args.body_chars is not None and not args.show_body:
+        raise _UsageError("--body-chars needs --show-body")
     if args.who is not None:
         if args.list_mailboxes:
             raise _UsageError("--who and --list-mailboxes exclude each other")
@@ -526,7 +531,8 @@ def _main(argv: Optional[List[str]]) -> int:
     if args.limit is not None:
         rows = rows[:args.limit]
     if args.show_body:
-        rows = [_with_body(row, not f.include_quoted) for row in rows]
+        cap = args.body_chars if args.body_chars is not None else BODY_CAP
+        rows = [_with_body(row, not f.include_quoted, cap) for row in rows]
     fmt = "json" if args.json else "paths" if args.paths_only else "table"
     _reconfigure_stdout()
     render(rows, fmt, sys.stdout, verbose=args.verbose, all_paths=args.all_paths,

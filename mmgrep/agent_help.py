@@ -38,7 +38,7 @@ Message-ID). Sorted by date ascending.
                   text removed unless --include-quoted); null when
                   unreadable or no text
   body_truncated  only with --show-body: true when body was cut at
-                  20,000 characters
+                  20,000 characters (or --body-chars N)
 
 Other formats: --paths-only prints the first path per message
 (--all-paths: every copy), one per line. Paths contain spaces
@@ -155,9 +155,10 @@ RECIPES
       --no-flag forwarded --not-header list-id \\
       --not-header list-unsubscribe \\
       --not-header 'precedence=^(bulk|list|junk)$' \\
-      --no-reply-from me@example.com --json --show-body
-    then judge the bodies: Drop robots (noreply@ and the like), receipts
-    and FYIs.
+      --not-header 'from=no-?reply|do-?not-?reply|notifications?@' \\
+      --no-reply-from me@example.com --json --show-body --body-chars 800
+    then judge the bodies: Drop receipts and FYIs. 800 characters show the
+    request in most mails; rerun one message without --body-chars for all.
   Mailbox names differ per account; list them first, then target one
   (sent mail, for example):
     mmgrep --list-mailboxes --json
