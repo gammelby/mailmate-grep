@@ -191,7 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
     out.add_argument("--limit", type=_type(_count, "N"), metavar="N",
                      help="print at most N messages (after sorting by date)")
     out.add_argument("-v", "--verbose", action="store_true",
-                     help="table: add to, cc and every path")
+                     help="table: add to, cc, flags and every path")
     return p
 
 
