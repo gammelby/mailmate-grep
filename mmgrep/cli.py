@@ -160,6 +160,11 @@ def build_parser() -> argparse.ArgumentParser:
     flt.add_argument("--no-flag", action="append", default=[], type=flag,
                      metavar="NAME",
                      help="flag on no copy (repeated: none of them)")
+    flt.add_argument("--no-reply-from", action="append", default=[], type=addr,
+                     metavar="ADDR",
+                     help="drop messages that a message from ADDR replies to, "
+                          "anywhere further down the thread (index only; "
+                          "not with --full)")
     flt.add_argument("--body", action="append", default=[], metavar="PATTERN",
                      help="regex over the unquoted body text")
     flt.add_argument("--include-quoted", action="store_true",
@@ -212,7 +217,7 @@ def _filters(args: argparse.Namespace) -> Filters:
         subject=args.subject, headers=headers,
         not_headers=not_headers, since=args.since,
         until=args.until, account=args.account, mailbox=args.mailbox,
-        flag=args.flag, no_flag=args.no_flag,
+        flag=args.flag, no_flag=args.no_flag, no_reply_from=args.no_reply_from,
         body=args.body[0] if args.body else None, include_quoted=args.include_quoted,
         case_sensitive=args.case_sensitive)
 
@@ -229,6 +234,8 @@ def _check(args: argparse.Namespace, f: Filters) -> None:
         raise _UsageError("--no-confirm cannot be used with --full")
     if args.full and (f.flag or f.no_flag):
         raise _UsageError("--flag and --no-flag need the index; not with --full")
+    if args.full and f.no_reply_from:
+        raise _UsageError("--no-reply-from needs the index; not with --full")
     flags = 0 if f.case_sensitive else re.IGNORECASE
     patterns: list[tuple[str, str]] = [("--subject", p) for p in f.subject]
     patterns += [(f"--header {n}", p) for n, ps in f.headers.items() for p in ps]
@@ -330,6 +337,11 @@ def _run_index(store: Store, f: Filters, jobs: int, no_confirm: bool,
             raise _UsageError("--flag and --no-flag: MailMate has no #flags index")
         if json_rows:
             names.update(n for n in THREAD_INDEXES if n in known)
+        if f.no_reply_from:
+            # Optional for replies: Without them nothing counts as a reply
+            # (or as a draft), so skip them instead of warning.
+            names.difference_update(n for n in (*THREAD_INDEXES, FLAGS)
+                                    if n not in known)
     snap = store.snapshot(names)
     cands = find_candidates(snap, f)
     grouped = group_copies(snap, cands.ids, f, store.messages_dir)

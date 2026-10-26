@@ -21,7 +21,7 @@ from mmgrep.query import (AddrSpec, Copy, Filters, Group, GroupResult,
                           has_filter, index_headers, mailbox_counts, message_ids,
                           needed_indexes, parse_addr,
                           parse_flag, parse_header_arg, parse_index_date,
-                          parse_not_header_arg,
+                          parse_not_header_arg, reply_ids,
                           parse_since, parse_until)
 from mmgrep.store import Store
 from tests import fixtures
@@ -326,7 +326,7 @@ class CandidateTest(_StoreTest):
         self.assertEqual(result.ids, {1200})
         self.assertEqual(result.stats["unmapped_parts"], 0)
         self.assertEqual(set(result.stats), {"live", "after_location", "after_dates",
-                                             "after_flags", "after_headers", "after_body",
+                                             "after_flags", "after_replies", "after_headers", "after_body",
                                              "unmapped_parts"})
 
     def test_body_multiline(self) -> None:
@@ -488,6 +488,48 @@ class MailboxCountTest(_StoreTest):
         ], 1))
         self.assertEqual(mailbox_counts(snap, Filters(account=["^bob@"])),
                          ([("bob@mail.example.org", "Archive/2024", 1)], 1))
+
+
+class ReplyTest(_StoreTest):
+    def _thread(self) -> None:
+        me = "Me <me@example.com>"
+        self.build([
+            msg(1200, headers=hdr(1200)),                       # never answered
+            msg(1300, headers=hdr(1300)),                       # answered directly
+            msg(1400, headers=hdr(1400)),                       # answered further down
+            msg(1500, headers=hdr(1500)),                       # only a draft reply
+            msg(1600, headers=hdr(1600)),                       # answered by someone else
+            msg(2300, mailbox="Sent", headers=hdr(2300, From=me,
+                In_Reply_To="<1300@example.com>")),
+            msg(2400, mailbox="Sent", headers=hdr(2400, From=me,
+                In_Reply_To="<1450@example.com>",
+                References="<1400@example.com> <1450@example.com>")),
+            msg(2500, mailbox="Drafts", headers=hdr(2500, From=me,
+                In_Reply_To="<1500@example.com>"),
+                index={"#flags": "\\Draft \\Seen"}),
+            msg(2600, headers=hdr(2600, From="other@example.org",
+                In_Reply_To="<1600@example.com>")),
+        ])
+
+    def test_reply_ids(self) -> None:
+        self._thread()
+        f = Filters(no_reply_from=[parse_addr("me@example.com")])
+        snap = self.snap(f)
+        self.assertEqual(reply_ids(snap, f.no_reply_from, 0), {
+            "<1300@example.com>", "<1400@example.com>", "<1450@example.com>"})
+
+    def test_no_reply_from(self) -> None:
+        self._thread()
+        cases = {
+            "me": (["me@example.com"], {1200, 1500, 1600}),
+            "domain": (["@example.org"], {1200, 1300, 1400, 1500}),
+            "either": (["me@example.com", "other@example.org"], {1200, 1500}),
+        }
+        for label, (specs, expected) in cases.items():
+            with self.subTest(case=label):
+                f = Filters(mailbox=["^INBOX$"], subject=["^Message 1"],
+                            no_reply_from=[parse_addr(s) for s in specs])
+                self.assertEqual(self.ids(f), expected)
 
 
 class NotHeaderTest(_StoreTest):

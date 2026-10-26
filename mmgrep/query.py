@@ -104,6 +104,8 @@ class Filters:
     pattern "" matches any value). flag and no_flag
     hold one lowercased token set per option (parse_flag): A message
     passes when its flags meet some flag set and no no_flag set.
+    no_reply_from drops a message that a live message from one of those
+    addresses answers (reply_ids).
     """
 
     from_: list[AddrSpec] = field(default_factory=list)
@@ -119,6 +121,7 @@ class Filters:
     not_headers: dict[str, list[str]] = field(default_factory=dict)
     flag: list[frozenset[str]] = field(default_factory=list)
     no_flag: list[frozenset[str]] = field(default_factory=list)
+    no_reply_from: list[AddrSpec] = field(default_factory=list)
     body: str | None = None
     include_quoted: bool = False
     case_sensitive: bool = False
@@ -265,7 +268,7 @@ def has_filter(f: Filters) -> bool:
     return bool(f.from_ or f.to or f.cc or f.any_address or f.subject
                 or f.headers or f.not_headers or f.since is not None or f.until is not None
                 or f.account or f.mailbox or f.flag or f.no_flag
-                or f.body is not None)
+                or f.no_reply_from or f.body is not None)
 
 
 def needed_indexes(f: Filters) -> set[str]:
@@ -279,6 +282,8 @@ def needed_indexes(f: Filters) -> set[str]:
         names.add(QUOTED)
     if f.flag or f.no_flag:
         names.add(FLAGS)
+    if f.no_reply_from:
+        names.update((FLAGS, *THREAD_INDEXES))
     names.update(f.headers)
     names.update(f.not_headers)
     return names
@@ -439,6 +444,28 @@ def _flag_step(snap: Snapshot, f: Filters, cands: set[int]) -> set[int]:
     return kept
 
 
+# Replies
+
+
+def reply_ids(snap: Snapshot, specs: list[AddrSpec], flags: int) -> set[str]:
+    """The Message-IDs that a live message from specs answers.
+
+    A message answers every Message-ID in its In-Reply-To and References,
+    so a reply further down a thread answers the whole thread above it.
+    Drafts (the \\Draft flag on the copy) are not replies.
+    """
+    senders = _address_step(snap, specs, ("from",), flags, set(snap.live))
+    out: set[str] = set()
+    for id in senders:
+        if "\\draft" in message_flags(snap, [id]):
+            continue
+        for name in THREAD_INDEXES:
+            index = snap.indexes.get(name)
+            for value in (index.values(id) if index is not None else None) or ():
+                out.update(message_ids(_decode(value)))
+    return out
+
+
 # Candidates
 
 
@@ -563,6 +590,14 @@ def candidates(snap: Snapshot, f: Filters) -> CandidateSet:
     if f.flag or f.no_flag:
         cands = _flag_step(snap, f, cands)
     stats["after_flags"] = len(cands)
+
+    if f.no_reply_from:
+        answered = reply_ids(snap, f.no_reply_from, flags)
+        mid_index = snap.indexes.get(MESSAGE_ID)
+        if mid_index is not None:
+            cands = {id for id in cands
+                     if _decode(mid_index.last(id) or b"").strip() not in answered}
+    stats["after_replies"] = len(cands)
 
     for attr, names in ADDRESS_FIELDS.items():
         specs = getattr(f, attr)

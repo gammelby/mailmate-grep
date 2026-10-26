@@ -101,6 +101,7 @@ Filters:
 | `--mailbox PATTERN` | Regex over the mailbox path |
 | `--flag NAME` | A flag on any copy of the message: `seen`, `answered`, `flagged`, `draft`, `deleted`, `forwarded`, `junk`, a raw IMAP flag (`'\Seen'`, `$MailFlagBit0`) or a MailMate tag (`tag:NAME` for a tag named like an alias); case is ignored. Repeated: any of them |
 | `--no-flag NAME` | The flag on no copy of the message. Repeated: none of them |
+| `--no-reply-from ADDR` | Drop a message that a message from ADDR answers: Its Message-ID is in that message's In-Reply-To or References, so a reply further down the thread counts. Drafts do not count. Repeated: replies from any of them. Index only; not with `--full` |
 | `--body PATTERN` | Regex over the unquoted body text (only once per search) |
 | `--include-quoted` | Also search quoted body text |
 | `-s`, `--case-sensitive` | Match patterns case-sensitively |

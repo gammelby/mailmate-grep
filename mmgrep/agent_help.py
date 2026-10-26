@@ -147,14 +147,17 @@ RECIPES
     mmgrep --subject 'quarterly report' --json
   A body phrase from one sender, quoted replies included:
     mmgrep --from bob@example.org --body 'contract renewal' --include-quoted --json
-  Inbox mail that may still need a reply (not answered or forwarded, no
-  mailing lists, newsletters or bulk mail):
+  Inbox mail that may still need a reply (not answered, forwarded or
+  replied to by the user anywhere in the thread; no mailing lists,
+  newsletters or bulk mail). Find the user's own addresses with --who
+  first, then:
     mmgrep --mailbox '^INBOX$' --since 2026-10-01 --no-flag answered \\
       --no-flag forwarded --not-header list-id \\
       --not-header list-unsubscribe \\
       --not-header 'precedence=^(bulk|list|junk)$' \\
-      --json
-    then drop rows whose sender is a robot (noreply@ and the like).
+      --no-reply-from me@example.com --json --show-body
+    then judge the bodies: Drop robots (noreply@ and the like), receipts
+    and FYIs.
   Mailbox names differ per account; list them first, then target one
   (sent mail, for example):
     mmgrep --list-mailboxes --json
@@ -163,9 +166,9 @@ RECIPES
     mmgrep --mailbox '^Sent Messages$' --since 2026-10-01 --json
   Replies to one message:
     mmgrep --header 'in-reply-to=<abc@example.com>' --json
-  Was a message answered without the flag being set (reply sent from
-  another client)? Search sent mail in the same period and check whether
-  its message_id appears in a sent row's in_reply_to or references.
+  --no-reply-from ADDR drops a message when a message from ADDR (not a
+  draft) lists its Message-ID in In-Reply-To or References. It is
+  computed from the index and catches replies sent from any client.
   Mailing lists and newsletters carry a List-Id or List-Unsubscribe header:
     mmgrep --header list-unsubscribe=. --since 2026-10-01 --json
   Read what you sent on one day, quoted text removed:

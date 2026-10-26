@@ -121,6 +121,9 @@ class TestMain(_StoreCase):
             (["--flag", "a b"], "invalid flag"),
             (["--no-flag", "answered"], "no #flags index"),
             (["--full", "--flag", "seen", "--subject", "Plan"], "not with --full"),
+            (["--full", "--no-reply-from", "a@example.com", "--subject", "Plan"],
+             "not with --full"),
+            (["--no-reply-from", "example.com"], None),
         ]
         for argv, needle in cases:
             with self.subTest(argv=argv):
@@ -132,6 +135,14 @@ class TestMain(_StoreCase):
                 self.assertNotIn("Traceback", err)
                 if needle:
                     self.assertIn(needle, err)
+
+    def test_no_reply_from_without_thread_indexes(self) -> None:
+        code, out, err = run("--root", self.root, "--subject", "Plan",
+                             "--no-reply-from", "a@example.com", "--json")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(len(out.splitlines()), 2)
+        for name in ("#flags", "in-reply-to", "references"):
+            self.assertNotIn(f"index {name} not present", err)
 
     def test_option_named_once(self) -> None:
         code, _, err = run("--root", self.root, "--since", "yesterday")
