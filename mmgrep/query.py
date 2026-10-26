@@ -680,23 +680,27 @@ def index_headers(snap: Snapshot, id: int) -> dict[str, str]:
     return out
 
 
-def mailbox_counts(snap: Snapshot, f: Filters) -> list[tuple[str, str, int]]:
-    """(account, mailbox, live messages) per mailbox, sorted.
+def mailbox_counts(snap: Snapshot, f: Filters) -> tuple[list[tuple[str, str, int]], int]:
+    """(account, mailbox, live messages) per mailbox, sorted, and the
+    number of live ids whose #source is absent or unmapped.
 
     The account has %40 decoded, as --account matches it. Only accounts
-    that pass f.account are listed; live ids whose #source is absent or
-    unmapped are left out.
+    that pass f.account are listed.
     """
     accounts, _ = _location_patterns(f)
     sources = _Sources(snap)
     counts: dict[tuple[str, str], int] = {}
+    unmapped = 0
     for id in snap.live:
         ref = sources.ref(id)
-        if ref is None or not _location_ok(ref, accounts, []):
+        if ref is None:
+            unmapped += 1
+            continue
+        if not _location_ok(ref, accounts, []):
             continue
         key = (account_display(ref), ref.mailbox)
         counts[key] = counts.get(key, 0) + 1
-    return [(a, m, n) for (a, m), n in sorted(counts.items())]
+    return [(a, m, n) for (a, m), n in sorted(counts.items())], unmapped
 
 
 def message_ids(text: str) -> list[str]:

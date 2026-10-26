@@ -584,10 +584,26 @@ class TestListMailboxes(_StoreCase):
         self.assertEqual(json.loads(out), {"account": account, "mailbox": "AAA",
                                            "messages": 1})
 
+    def test_uncounted_messages_are_reported(self) -> None:
+        store = tempfile.TemporaryDirectory()
+        self.addCleanup(store.cleanup)
+        bad = msg(1300)
+        bad.raw = {"#source": [(999999, 1000000)]}  # out of the cache
+        build_store(pathlib.Path(store.name), [msg(1200), bad])
+        code, out, err = run("--root", store.name, "--list-mailboxes")
+        self.assertEqual(len(out.splitlines()), 1)
+        self.assertIn("mmgrep: 1 messages without a known mailbox are not counted",
+                      err.splitlines())
+        self.assertIn("mmgrep: 1 skipped records in #source", err.splitlines())
+
     def test_account_filter_and_errors(self) -> None:
         code, out, _ = run("--root", self.root, "--list-mailboxes", "--account", "^nobody@")
         self.assertEqual((code, out), (1, ""))
-        for argv in (["--subject", "x"], ["--account", "("], ["--who", "a"], ["-v"]):
+        code, out, _ = run("--root", self.root, "--list-mailboxes", "-s", "--account", "^USER@")
+        self.assertEqual((code, out), (1, ""))
+        for argv in (["--subject", "x"], ["--account", "("], ["--who", "a"], ["-v"],
+                     ["--include-quoted"], ["--flag", "seen"], ["--not-header", "subject"],
+                     ["--paths-only"], ["--full"], ["--open"]):
             with self.subTest(argv=argv):
                 code, out, err = run("--root", self.root, "--list-mailboxes", *argv)
                 self.assertEqual(code, 2, err)

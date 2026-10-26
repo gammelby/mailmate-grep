@@ -460,6 +460,9 @@ def _check_message(msg: Message, f: Filters, message_id: str | None,
         if patterns:
             checks.append(_check_patterns(h, name, [re.compile(p, flags) for p in patterns]))
     for name, patterns in f.not_headers.items():
+        if "" in patterns and h.values(name):
+            checks.append(False)  # Present: No value needs decoding.
+            continue
         hit = _check_patterns(h, name, [re.compile(p, flags) for p in patterns])
         checks.append(None if hit is None else not hit)
 

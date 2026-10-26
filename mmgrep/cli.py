@@ -115,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
                         "with --json, --limit and --root only")
     p.add_argument("--list-mailboxes", action="store_true",
                    help="list every mailbox with its account and message count; "
-                        "works with --account, --json, --limit and --root only")
+                        "works with --account, -s, --json, --limit and --root only")
     p.add_argument("--help-agents", action=_AgentHelp,
                    help="extended guide for coding agents and scripts (JSON "
                         "schema, exit codes, semantics, recipes) and exit")
@@ -445,16 +445,16 @@ def _run_mailboxes(args: argparse.Namespace, f: Filters) -> int:
     only_account = Filters(account=f.account, case_sensitive=f.case_sensitive)
     if (f != only_account or args.full or args.no_confirm or args.paths_only
             or args.all_paths or args.verbose or args.jobs is not None or args.open):
-        raise _UsageError("--list-mailboxes works only with --account, --json, "
-                          "--limit and --root")
+        raise _UsageError("--list-mailboxes works only with --account, -s, "
+                          "--json, --limit and --root")
     flags = 0 if f.case_sensitive else re.IGNORECASE
     for pattern in f.account:
         try:
             re.compile(pattern, flags)
         except re.error as e:
             raise _UsageError(f"--account: invalid pattern {pattern!r}: {e}") from None
-    snap =Store(Path(args.root)).snapshot({SOURCE})
-    rows = mailbox_counts(snap, f)
+    snap = Store(Path(args.root)).snapshot({SOURCE})
+    rows, unmapped = mailbox_counts(snap, f)
     shown = rows[:args.limit] if args.limit is not None else rows
     _reconfigure_stdout()
     for account, mailbox, count in shown:
@@ -464,6 +464,11 @@ def _run_mailboxes(args: argparse.Namespace, f: Filters) -> int:
         else:
             print(f"{count:7d}  {account}  {mailbox}")
     sys.stdout.flush()
+    if unmapped:
+        _err(f"{unmapped} messages without a known mailbox are not counted")
+    for name in sorted(snap.skipped_records):
+        if snap.skipped_records[name]:
+            _err(f"{snap.skipped_records[name]} skipped records in {name}")
     for w in snap.warnings:
         _err(f"warning: {w}")
     if snap.unstable:

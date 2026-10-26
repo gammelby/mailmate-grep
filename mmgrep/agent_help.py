@@ -109,7 +109,9 @@ QUERY SEMANTICS
   --account and --mailbox are regexes over the account name (with %40
   shown as @) and the mailbox path such as "INBOX" or "Archive/2024".
   --list-mailboxes prints every account and mailbox with its message
-  count (with --json, --account, --limit and --root only).
+  count (copies in MailMate's index, so it can exceed the rows a search
+  of that mailbox prints); with --account, -s, --json, --limit and
+  --root only.
 
 FLAGS AND TAGS (--flag, --no-flag)
   --flag NAME keeps a message when any copy has the flag; --no-flag NAME

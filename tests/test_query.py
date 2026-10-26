@@ -481,13 +481,13 @@ class MailboxCountTest(_StoreTest):
         ])
         snap = self.snap(Filters())
         user = "user@example.com@imap.example.com"
-        self.assertEqual(mailbox_counts(snap, Filters()), [
+        self.assertEqual(mailbox_counts(snap, Filters()), ([
             ("bob@mail.example.org", "Archive/2024", 1),
             (user, "INBOX", 2),
             (user, "Sent Messages", 1),
-        ])
+        ], 1))
         self.assertEqual(mailbox_counts(snap, Filters(account=["^bob@"])),
-                         [("bob@mail.example.org", "Archive/2024", 1)])
+                         ([("bob@mail.example.org", "Archive/2024", 1)], 1))
 
 
 class NotHeaderTest(_StoreTest):

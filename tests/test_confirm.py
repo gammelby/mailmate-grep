@@ -11,6 +11,8 @@ tests.fixtures.build_store; tests may rewrite, delete or chmod a fixture
 from __future__ import annotations
 
 import builtins
+import email.parser
+import email.policy
 import os
 import pathlib
 import tempfile
@@ -421,6 +423,20 @@ class ApiTest(_ConfirmTest):
         self.assertEqual(date, datetime(2024, 3, 5, 13, 7, 9, tzinfo=UTC))
         self.assertEqual(check_message(m, f, None, False)[0], "confirmed")
         self.assertEqual(check_message(m, f, "<x@example.com>", False)[0], "rejected")
+
+    def test_not_header_presence_needs_no_decoding(self) -> None:
+        raw = (b"Message-ID: <1200@example.com>\nSubject: Odd\n"
+               b"List-Id: =?unknown-charset?Q?news?=\n\nBody\n")
+        m = email.parser.BytesParser(policy=email.policy.default).parsebytes(raw)
+        cases = {
+            "": "rejected",          # present, whatever its value
+            "^other$": "indeterminate",  # the value cannot be decided
+        }
+        for pattern, expected in cases.items():
+            with self.subTest(pattern=pattern):
+                f = Filters(not_headers={"list-id": [pattern]})
+                self.assertEqual(check_message(m, f, "<1200@example.com>", False)[0],
+                                 expected)
 
     def test_confirm_all_pool(self) -> None:
         self.build([msg(1200 + 10 * i, headers=hdr(1200 + 10 * i, Subject=f"Pool {i}"))
