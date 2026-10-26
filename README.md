@@ -161,6 +161,12 @@ One row per message. Copies of one message in several mailboxes (same Message-ID
 
 Diagnostics go to stderr, one line each: Index hits not confirmed, indeterminate confirmations, skipped malformed records, body segments without a live message, copies without an `.eml` file, snapshot retries, directories `--full` could not read and warnings. Output into a closed pipe (`| head`) ends quietly.
 
+## Using it with Claude Code and other agents
+
+mmgrep is built to be driven by a coding agent: Ask "which mails from last week still need a reply from me?" and the agent runs one query and sorts the result for you. `mmgrep --help-agents` prints a guide written for agents (JSON schema, exit codes, semantics and recipes).
+
+For Claude Code, [skills/mmgrep/SKILL.md](skills/mmgrep/SKILL.md) is a ready-made skill that tells Claude when to reach for mmgrep and how to use it well. Read it, adapt it if you like and copy the folder to `~/.claude/skills/mmgrep/` (all your projects) or `.claude/skills/mmgrep/` in one project. It expects `mmgrep` on your PATH.
+
 ## How it works
 
 1. Read each index file the query needs whole in one read and check that the snapshot is consistent (retrying when MailMate changed a file mid-read).
